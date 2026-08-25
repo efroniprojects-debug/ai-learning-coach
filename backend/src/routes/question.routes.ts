@@ -9,12 +9,34 @@ const askQuestionSchema = z.object({
   imageUrls: z.array(z.string().url()).optional(),
 });
 
+interface AskQuestionBody {
+  text: string;
+  imageUrls?: string[];
+}
+
+interface QuestionIdParams {
+  questionId: string;
+}
+
+interface HintBody {
+  questionText: string;
+  previousExplanation: string;
+}
+
+interface SolutionBody {
+  questionText: string;
+}
+
+interface KnowledgeSearchQuery {
+  q: string;
+  limit?: string;
+}
+
 export async function questionRoutes(app: FastifyInstance) {
-  // POST /api/v1/questions/ask
-  app.post<{ Body: unknown }>(
+  app.post<{ Body: AskQuestionBody }>(
     '/api/v1/questions/ask',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: AskQuestionBody }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -46,11 +68,10 @@ export async function questionRoutes(app: FastifyInstance) {
     }
   );
 
-  // POST /api/v1/questions/:questionId/hint
-  app.post<{ Params: { questionId: string }; Body: unknown }>(
+  app.post<{ Params: QuestionIdParams; Body: HintBody }>(
     '/api/v1/questions/:questionId/hint',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: QuestionIdParams; Body: HintBody }>, reply: FastifyReply) => {
       try {
         const hintSchema = z.object({
           questionText: z.string(),
@@ -76,11 +97,10 @@ export async function questionRoutes(app: FastifyInstance) {
     }
   );
 
-  // POST /api/v1/questions/:questionId/solution
-  app.post<{ Params: { questionId: string }; Body: unknown }>(
+  app.post<{ Params: QuestionIdParams; Body: SolutionBody }>(
     '/api/v1/questions/:questionId/solution',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: QuestionIdParams; Body: SolutionBody }>, reply: FastifyReply) => {
       try {
         const solutionSchema = z.object({
           questionText: z.string(),
@@ -102,11 +122,10 @@ export async function questionRoutes(app: FastifyInstance) {
     }
   );
 
-  // GET /api/v1/knowledge/search
-  app.get<{ Querystring: { q: string; limit?: string } }>(
+  app.get<{ Querystring: KnowledgeSearchQuery }>(
     '/api/v1/knowledge/search',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Querystring: KnowledgeSearchQuery }>, reply: FastifyReply) => {
       try {
         const query = request.query.q;
         const limit = Math.min(parseInt(request.query.limit || '10'), 20);
@@ -147,11 +166,10 @@ export async function questionRoutes(app: FastifyInstance) {
     }
   );
 
-  // GET /api/v1/knowledge/chunks/:chunkId
   app.get<{ Params: { chunkId: string } }>(
     '/api/v1/knowledge/chunks/:chunkId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: { chunkId: string } }>, reply: FastifyReply) => {
       try {
         const chunk = await KnowledgeService.getChunkById(request.params.chunkId);
 

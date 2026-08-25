@@ -14,12 +14,22 @@ const uploadFileSchema = z.object({
   storageUrl: z.string().url('Invalid storage URL'),
 });
 
+interface UploadFileBody {
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  storageUrl: string;
+}
+
+interface UploadIdParams {
+  uploadId: string;
+}
+
 export async function uploadRoutes(app: FastifyInstance) {
-  // POST /api/v1/uploads/file
-  app.post<{ Body: unknown }>(
+  app.post<{ Body: UploadFileBody }>(
     '/api/v1/uploads/file',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: UploadFileBody }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -74,11 +84,10 @@ export async function uploadRoutes(app: FastifyInstance) {
     }
   );
 
-  // GET /api/v1/uploads/:uploadId
-  app.get<{ Params: { uploadId: string } }>(
+  app.get<{ Params: UploadIdParams }>(
     '/api/v1/uploads/:uploadId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: UploadIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -95,11 +104,10 @@ export async function uploadRoutes(app: FastifyInstance) {
     }
   );
 
-  // DELETE /api/v1/uploads/:uploadId
-  app.delete<{ Params: { uploadId: string } }>(
+  app.delete<{ Params: UploadIdParams }>(
     '/api/v1/uploads/:uploadId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: UploadIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -116,11 +124,10 @@ export async function uploadRoutes(app: FastifyInstance) {
     }
   );
 
-  // POST /api/v1/uploads/process/:uploadId (for testing OCR pipeline)
-  app.post<{ Params: { uploadId: string } }>(
+  app.post<{ Params: UploadIdParams }>(
     '/api/v1/uploads/process/:uploadId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: UploadIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -159,10 +166,10 @@ export async function uploadRoutes(app: FastifyInstance) {
           await db.insert(knowledgeChunks).values({
             sourceType: 'custom',
             sourceId: uploadId,
-            sourceDocumentId: uploadId,
+            sourceDocumentId: uploadId as any,
             chunkText: chunk.text,
-            chunkEmbedding: embedding,
-            conceptIds: [],
+            chunkEmbedding: JSON.stringify(embedding),
+            conceptIds: [] as any,
             metadata: {
               chunkIndex: chunk.metadata.chunkIndex,
               section: chunk.metadata.section,

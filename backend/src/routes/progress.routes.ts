@@ -29,16 +29,16 @@ export async function progressRoutes(app: FastifyInstance) {
         });
 
         const distribution = {
-          novice: allMastery.filter((m) => m.eloRating < 1200).length,
-          intermediate: allMastery.filter((m) => m.eloRating >= 1200 && m.eloRating < 1400).length,
-          proficient: allMastery.filter((m) => m.eloRating >= 1400 && m.eloRating < 1600).length,
-          expert: allMastery.filter((m) => m.eloRating >= 1600).length,
+          novice: allMastery.filter((m) => (m.eloRating ?? 1000) < 1200).length,
+          intermediate: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1200 && (m.eloRating ?? 1000) < 1400).length,
+          proficient: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1400 && (m.eloRating ?? 1000) < 1600).length,
+          expert: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1600).length,
         };
 
         const totalConcepts = allMastery.length;
         const averageElo =
           totalConcepts > 0
-            ? Math.round(allMastery.reduce((sum, m) => sum + m.eloRating, 0) / totalConcepts)
+            ? Math.round(allMastery.reduce((sum: number, m) => sum + (m.eloRating ?? 1000), 0) / totalConcepts)
             : 0;
 
         reply.status(200).send({
@@ -112,11 +112,11 @@ export async function progressRoutes(app: FastifyInstance) {
         reply.status(200).send({
           concepts: allMastery.map((m) => ({
             conceptId: m.conceptId,
-            eloRating: m.eloRating,
+            eloRating: m.eloRating || 1000,
             confidenceLevel: m.confidenceLevel,
             attemptsCount: m.attemptsCount || 0,
-            correctAttempts: m.correctAttempts || 0,
-            successRate: m.attemptsCount ? (m.correctAttempts / m.attemptsCount) * 100 : 0,
+            correctAttempts: (m.correctAttempts || 0),
+            successRate: (m.attemptsCount || 0) ? ((m.correctAttempts || 0) / (m.attemptsCount || 1)) * 100 : 0,
             lastAttemptedAt: m.lastAttemptedAt,
           })),
         });

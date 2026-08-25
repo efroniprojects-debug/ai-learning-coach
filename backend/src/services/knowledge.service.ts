@@ -74,8 +74,8 @@ export class KnowledgeService {
       let score = 0;
       keywords.forEach((keyword) => {
         if (chunk.text.includes(keyword)) score++;
-        if (chunk.metadata.concept?.includes(keyword)) score += 2;
-        if (chunk.metadata.topic?.includes(keyword)) score += 1.5;
+        if (chunk.metadata.concept && chunk.metadata.concept.includes(keyword)) score += 2;
+        if (chunk.metadata.topic && chunk.metadata.topic.includes(keyword)) score += 1.5;
       });
       return { chunk, score };
     });
@@ -118,7 +118,7 @@ export class KnowledgeService {
    */
   static async getTopics(): Promise<string[]> {
     const topics = new Set(
-      MOCK_CHUNKS.map((chunk) => chunk.metadata.topic).filter(Boolean)
+      MOCK_CHUNKS.map((chunk) => chunk.metadata.topic).filter((t): t is string => Boolean(t))
     );
     return Array.from(topics);
   }

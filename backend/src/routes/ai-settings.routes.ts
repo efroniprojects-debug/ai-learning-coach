@@ -9,8 +9,11 @@ const saveProviderSchema = z.object({
   apiKey: z.string().min(1, 'API key is required'),
 });
 
+interface ConfigIdParams {
+  configId: string;
+}
+
 export async function aiSettingsRoutes(app: FastifyInstance) {
-  // GET /api/v1/ai-settings/configs
   app.get(
     '/api/v1/ai-settings/configs',
     { preHandler: authMiddleware },
@@ -59,11 +62,10 @@ export async function aiSettingsRoutes(app: FastifyInstance) {
     }
   );
 
-  // POST /api/v1/ai-settings/:configId/activate
-  app.post(
+  app.post<{ Params: ConfigIdParams }>(
     '/api/v1/ai-settings/:configId/activate',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest<{ Params: { configId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: ConfigIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });
@@ -82,11 +84,10 @@ export async function aiSettingsRoutes(app: FastifyInstance) {
     }
   );
 
-  // DELETE /api/v1/ai-settings/:configId
-  app.delete(
+  app.delete<{ Params: ConfigIdParams }>(
     '/api/v1/ai-settings/:configId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest<{ Params: { configId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: ConfigIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) {
           return reply.status(401).send({ error: 'Unauthorized' });

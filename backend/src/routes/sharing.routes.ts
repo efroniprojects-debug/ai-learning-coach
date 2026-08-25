@@ -12,15 +12,24 @@ const generateLinkSchema = z.object({
 });
 
 function generateShareId(): string {
-  return Math.random().toString(36).substring(2, 14); // 12 char random ID
+  return Math.random().toString(36).substring(2, 14);
+}
+
+interface GenerateLinkBody {
+  resourceType: 'question' | 'solution' | 'progress_report';
+  resourceId: string;
+  expiresIn?: number;
+}
+
+interface ShareIdParams {
+  shareId: string;
 }
 
 export async function sharingRoutes(app: FastifyInstance) {
-  // POST /api/v1/share/generate-link
-  app.post<{ Body: unknown }>(
+  app.post<{ Body: GenerateLinkBody }>(
     '/api/v1/share/generate-link',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: GenerateLinkBody }>, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -37,7 +46,7 @@ export async function sharingRoutes(app: FastifyInstance) {
             id: shareId,
             userId: request.user.userId,
             resourceType: body.resourceType,
-            resourceId: body.resourceId as any,
+            resourceId: body.resourceId as unknown as import('@/db').NewShareLink['resourceId'],
             accessToken,
             expiresAt,
           })
@@ -60,10 +69,9 @@ export async function sharingRoutes(app: FastifyInstance) {
     }
   );
 
-  // GET /api/v1/share/:shareId (public, no auth)
-  app.get(
+  app.get<{ Params: ShareIdParams }>(
     '/api/v1/share/:shareId',
-    async (request: FastifyRequest<{ Params: { shareId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: ShareIdParams }>, reply: FastifyReply) => {
       try {
         const { shareId } = request.params;
         const accessToken = (request.headers['x-share-token'] as string) || '';
@@ -106,11 +114,10 @@ export async function sharingRoutes(app: FastifyInstance) {
     }
   );
 
-  // DELETE /api/v1/share/:shareId
-  app.delete(
+  app.delete<{ Params: ShareIdParams }>(
     '/api/v1/share/:shareId',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest<{ Params: { shareId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: ShareIdParams }>, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 

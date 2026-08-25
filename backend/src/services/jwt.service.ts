@@ -16,20 +16,20 @@ export interface JWTPayload {
 
 export class JWTService {
   static generateAccessToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_SECRET!, {
+    return jwt.sign(payload, JWT_SECRET as any, {
       expiresIn: JWT_EXPIRES_IN,
-    });
+    } as any);
   }
 
   static generateRefreshToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_REFRESH_SECRET!, {
+    return jwt.sign(payload, JWT_REFRESH_SECRET as any, {
       expiresIn: JWT_REFRESH_EXPIRES_IN,
-    });
+    } as any);
   }
 
   static verifyAccessToken(token: string): JWTPayload {
     try {
-      return jwt.verify(token, JWT_SECRET!) as JWTPayload;
+      return jwt.verify(token, JWT_SECRET as any) as JWTPayload;
     } catch (error) {
       throw new Error('Invalid or expired access token');
     }
@@ -37,7 +37,7 @@ export class JWTService {
 
   static verifyRefreshToken(token: string): JWTPayload {
     try {
-      return jwt.verify(token, JWT_REFRESH_SECRET!) as JWTPayload;
+      return jwt.verify(token, JWT_REFRESH_SECRET as any) as JWTPayload;
     } catch (error) {
       throw new Error('Invalid or expired refresh token');
     }

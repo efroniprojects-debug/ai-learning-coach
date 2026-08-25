@@ -1,4 +1,4 @@
-import { db, aiProviderConfigs } from '@/db';
+import { db, aiProviderConfigs, type AIProviderConfig } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { EncryptionService } from './encryption.service';
 
@@ -133,19 +133,15 @@ export class AISettingsService {
     }
   }
 
-  /**
-   * Format config response (remove encrypted key)
-   */
-  private static formatConfigResponse(config: any) {
+  private static formatConfigResponse(config: AIProviderConfig) {
     return {
       id: config.id,
       provider: config.provider,
       model: config.model,
       isActive: config.isActive,
       usageCount: config.usageCount,
-      createdAt: config.createdAt.toISOString(),
-      updatedAt: config.updatedAt.toISOString(),
-      // NEVER return apiKeyEncrypted to client
+      createdAt: config.createdAt instanceof Date ? config.createdAt.toISOString() : new Date(config.createdAt).toISOString(),
+      updatedAt: config.updatedAt instanceof Date ? config.updatedAt.toISOString() : new Date(config.updatedAt).toISOString(),
     };
   }
 }

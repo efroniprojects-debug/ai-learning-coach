@@ -30,7 +30,7 @@ export class ClaudeAdapter implements AIAdapter {
       provider: 'claude',
       model: this.model,
       tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
-      stopReason: response.stop_reason,
+      stopReason: response.stop_reason || undefined,
     };
   }
 

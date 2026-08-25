@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 const ENCRYPTION_ALGORITHM = process.env.ENCRYPTION_ALGORITHM || 'aes-256-gcm';
 
 if (!ENCRYPTION_KEY) {
@@ -8,41 +8,38 @@ if (!ENCRYPTION_KEY) {
 }
 
 export class EncryptionService {
-  private static readonly key = Buffer.from(ENCRYPTION_KEY, 'base64');
+  private static readonly key = Buffer.from(ENCRYPTION_KEY, 'base64') as any;
   private static readonly algorithm = ENCRYPTION_ALGORITHM;
 
-  /**
-   * Encrypt API key for storage
-   */
   static encrypt(plaintext: string): string {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
+    const iv = crypto.randomBytes(16) as any;
+    const cipherObj = crypto.createCipheriv(this.algorithm as any, this.key, iv);
 
-    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
+    let encrypted = cipherObj.update(plaintext, 'utf8', 'hex');
+    encrypted += cipherObj.final('hex');
 
-    const authTag = (cipher as any).getAuthTag();
+    const authTag = (cipherObj as any).getAuthTag();
 
-    // Combine iv + authTag + encrypted data
     const combined = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
     return combined;
   }
 
-  /**
-   * Decrypt API key from storage
-   */
   static decrypt(encrypted: string): string {
     try {
-      const [ivHex, authTagHex, encryptedHex] = encrypted.split(':');
+      const parts = encrypted.split(':');
+      if (parts.length !== 3) {
+        throw new Error('Invalid encrypted format');
+      }
 
-      const iv = Buffer.from(ivHex, 'hex');
+      const [ivHex, authTagHex, encryptedHex] = parts;
+      const iv = Buffer.from(ivHex, 'hex') as any;
       const authTag = Buffer.from(authTagHex, 'hex');
 
-      const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv);
-      (decipher as any).setAuthTag(authTag);
+      const decipherObj = crypto.createDecipheriv(this.algorithm as any, this.key, iv);
+      (decipherObj as any).setAuthTag(authTag);
 
-      let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      let decrypted = decipherObj.update(encryptedHex, 'hex', 'utf8');
+      decrypted += decipherObj.final('utf8');
 
       return decrypted;
     } catch (error) {

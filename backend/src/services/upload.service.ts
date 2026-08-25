@@ -1,4 +1,4 @@
-import { db, uploadedFiles, knowledgeChunks } from '@/db';
+import { db, uploadedFiles, knowledgeChunks, type UploadedFile } from '@/db';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -113,10 +113,7 @@ export class UploadService {
     await db.delete(uploadedFiles).where(eq(uploadedFiles.id, uploadId));
   }
 
-  /**
-   * Format upload for response (no sensitive data)
-   */
-  private static formatUploadResponse(upload: any) {
+  private static formatUploadResponse(upload: UploadedFile) {
     return {
       id: upload.id,
       fileName: upload.fileName,
@@ -124,9 +121,7 @@ export class UploadService {
       mimeType: upload.mimeType,
       isProcessed: upload.isProcessed,
       processingStatus: upload.processingStatus,
-      createdAt: upload.createdAt.toISOString(),
-      // Don't return storageUrl (internal)
-      // Don't return contentExtracted (used internally)
+      createdAt: upload.createdAt instanceof Date ? upload.createdAt.toISOString() : new Date(upload.createdAt).toISOString(),
     };
   }
 }

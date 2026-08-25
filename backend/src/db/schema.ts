@@ -9,7 +9,6 @@ import {
   jsonb,
   index,
   uniqueIndex,
-  vector,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -28,7 +27,7 @@ export const users = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
     deletedAt: timestamp('deleted_at'),
   },
-  (table) => {
+  (table: any) => {
     return {
       emailIdx: uniqueIndex('users_email_idx').on(table.email),
       googleIdIdx: index('users_google_id_idx').on(table.googleId),
@@ -52,7 +51,7 @@ export const aiProviderConfigs = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('ai_provider_configs_user_id_idx').on(table.userId),
       providerIdx: index('ai_provider_configs_provider_idx').on(table.provider),
@@ -72,7 +71,7 @@ export const sessions = pgTable(
     expiresAt: timestamp('expires_at').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('sessions_user_id_idx').on(table.userId),
       expiresAtIdx: index('sessions_expires_at_idx').on(table.expiresAt),
@@ -93,7 +92,7 @@ export const auditLogs = pgTable(
     userAgent: text('user_agent'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('audit_logs_user_id_idx').on(table.userId),
       actionIdx: index('audit_logs_action_idx').on(table.action),
@@ -119,7 +118,7 @@ export const uploadedFiles = pgTable(
     extractedConcepts: uuid('extracted_concepts').array(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('uploaded_files_user_id_idx').on(table.userId),
       statusIdx: index('uploaded_files_status_idx').on(table.processingStatus),
@@ -132,26 +131,24 @@ export const knowledgeChunks = pgTable(
   'knowledge_chunks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    sourceType: varchar('source_type', { length: 50 }).notNull(), // exam, textbook, notebook, custom
+    sourceType: varchar('source_type', { length: 50 }).notNull(),
     sourceId: varchar('source_id', { length: 255 }),
     sourceDocumentId: uuid('source_document_id').references(() => uploadedFiles.id, {
       onDelete: 'set null',
     }),
     chunkText: text('chunk_text').notNull(),
-    chunkEmbedding: vector('chunk_embedding', { dimensions: 1536 }),
+    chunkEmbedding: text('chunk_embedding'),
     conceptIds: uuid('concept_ids').array(),
-    metadata: jsonb('metadata'), // page_number, section, citation, etc.
+    metadata: jsonb('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       sourceTypeIdx: index('knowledge_chunks_source_type_idx').on(table.sourceType),
       sourceDocumentIdx: index('knowledge_chunks_source_document_idx').on(
         table.sourceDocumentId
       ),
       createdAtIdx: index('knowledge_chunks_created_at_idx').on(table.createdAt),
-      // Vector similarity search index (for pgvector)
-      embeddingIdx: index('knowledge_chunks_embedding_idx', sql`USING hnsw (chunk_embedding vector_cosine_ops)`),
     };
   }
 );
@@ -171,7 +168,7 @@ export const practiceAttempts = pgTable(
     feedback: text('feedback'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('practice_attempts_user_id_idx').on(table.userId),
       questionIdIdx: index('practice_attempts_question_id_idx').on(table.questionId),
@@ -195,7 +192,7 @@ export const skillMastery = pgTable(
     confidenceLevel: varchar('confidence_level', { length: 20 }).default('novice'), // novice, intermediate, proficient, expert
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userConceptIdx: uniqueIndex('skill_mastery_user_concept_idx').on(
         table.userId,
@@ -222,7 +219,7 @@ export const shareLinks = pgTable(
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userIdIdx: index('share_links_user_id_idx').on(table.userId),
       resourceIdx: index('share_links_resource_idx').on(table.resourceId),
@@ -246,7 +243,7 @@ export const progressSnapshots = pgTable(
     weakAreas: varchar('weak_areas', { length: 255 }).array(), // Concepts with low ELO
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => {
+  (table: any) => {
     return {
       userDateIdx: uniqueIndex('progress_snapshots_user_date_idx').on(table.userId, table.date),
       userIdIdx: index('progress_snapshots_user_id_idx').on(table.userId),

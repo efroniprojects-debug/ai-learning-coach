@@ -63,9 +63,8 @@ export class PracticeService {
       where: eq(skillMastery.userId, userId),
     });
 
-    // Identify weak concepts
-    const weakConcepts = allMastery.filter((m) => m.eloRating < 1300);
-    const strongConcepts = allMastery.filter((m) => m.eloRating >= 1300);
+    const weakConcepts = allMastery.filter((m) => (m.eloRating ?? 1000) < 1300);
+    const strongConcepts = allMastery.filter((m) => (m.eloRating ?? 1000) >= 1300);
 
     // Select concept
     const shouldPracticeWeak = Math.random() < 0.8; // 80% weak, 20% strong
@@ -79,12 +78,10 @@ export class PracticeService {
       throw new Error('No concepts to practice');
     }
 
-    // TODO: Select actual problem from knowledge base
-    // For now, return selected concept
     return {
       conceptId: selectedMastery.conceptId,
-      difficulty: this.calculateDifficulty(selectedMastery.eloRating),
-      eloRating: selectedMastery.eloRating,
+      difficulty: this.calculateDifficulty(selectedMastery.eloRating ?? 1000),
+      eloRating: selectedMastery.eloRating ?? 1000,
     };
   }
 
@@ -111,17 +108,16 @@ export class PracticeService {
     // Get current mastery
     const mastery = await this.getOrCreateMastery(userId, conceptId);
 
-    // Calculate ELO change
-    const eloChange = this.calculateEloChange(mastery.eloRating, isCorrect);
-    const newElo = Math.max(800, mastery.eloRating + eloChange); // Floor at 800
+    const currentElo = mastery.eloRating ?? 1000;
+    const eloChange = this.calculateEloChange(currentElo, isCorrect);
+    const newElo = Math.max(800, currentElo + eloChange);
 
-    // Update mastery
     const [updated] = await db
       .update(skillMastery)
       .set({
         eloRating: newElo,
-        attemptsCount: mastery.attemptsCount + 1,
-        correctAttempts: mastery.correctAttempts + (isCorrect ? 1 : 0),
+        attemptsCount: (mastery.attemptsCount ?? 0) + 1,
+        correctAttempts: (mastery.correctAttempts ?? 0) + (isCorrect ? 1 : 0),
         lastAttemptedAt: new Date(),
         confidenceLevel: this.getConfidenceLevel(newElo),
         updatedAt: new Date(),
@@ -134,10 +130,9 @@ export class PracticeService {
       )
       .returning();
 
-    // Record attempt
     await db.insert(practiceAttempts).values({
       userId,
-      questionId: conceptId as any, // TODO: Link to actual question ID
+      questionId: conceptId,
       isCorrect,
       score: isCorrect ? 100 : Math.max(0, 50 - timeSpentSeconds / 10),
       timeSpentSeconds,
@@ -194,12 +189,12 @@ export class PracticeService {
       where: eq(skillMastery.userId, userId),
     });
 
-    const masteryLevels: Record<string, number> = {};
+    const masteryLevels: Record<string, number | undefined> = {};
     const weakAreas: string[] = [];
 
     for (const m of allMastery) {
-      masteryLevels[m.conceptId] = m.eloRating;
-      if (m.eloRating < 1200) {
+      masteryLevels[m.conceptId] = m.eloRating ?? 1000;
+      if ((m.eloRating ?? 1000) < 1200) {
         weakAreas.push(m.conceptId);
       }
     }
@@ -269,19 +264,19 @@ export class PracticeService {
     });
 
     const overview = {
-      novice: allMastery.filter((m) => m.eloRating < 1200).length,
-      intermediate: allMastery.filter((m) => m.eloRating >= 1200 && m.eloRating < 1400).length,
-      proficient: allMastery.filter((m) => m.eloRating >= 1400 && m.eloRating < 1600).length,
-      expert: allMastery.filter((m) => m.eloRating >= 1600).length,
+      novice: allMastery.filter((m) => (m.eloRating ?? 1000) < 1200).length,
+      intermediate: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1200 && (m.eloRating ?? 1000) < 1400).length,
+      proficient: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1400 && (m.eloRating ?? 1000) < 1600).length,
+      expert: allMastery.filter((m) => (m.eloRating ?? 1000) >= 1600).length,
     };
 
     return {
       totalConcepts: allMastery.length,
       distribution: overview,
       averageElo: allMastery.length > 0 ?
-        Math.round(allMastery.reduce((sum, m) => sum + m.eloRating, 0) / allMastery.length) :
+        Math.round(allMastery.reduce((sum: number, m) => sum + (m.eloRating ?? 1000), 0) / allMastery.length) :
         0,
-      masteryList: allMastery.sort((a, b) => b.eloRating - a.eloRating),
+      masteryList: allMastery.sort((a, b) => (b.eloRating ?? 1000) - (a.eloRating ?? 1000)),
     };
   }
 
