@@ -5,6 +5,9 @@ import { authRoutes } from '@/routes/auth.routes';
 import { aiSettingsRoutes } from '@/routes/ai-settings.routes';
 import { questionRoutes } from '@/routes/question.routes';
 import { uploadRoutes } from '@/routes/upload.routes';
+import { practiceRoutes } from '@/routes/practice.routes';
+import { sharingRoutes } from '@/routes/sharing.routes';
+import { progressRoutes } from '@/routes/progress.routes';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
@@ -39,6 +42,9 @@ async function startServer() {
   await aiSettingsRoutes(app);
   await questionRoutes(app);
   await uploadRoutes(app);
+  await practiceRoutes(app);
+  await sharingRoutes(app);
+  await progressRoutes(app);
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {

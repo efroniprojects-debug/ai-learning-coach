@@ -5,6 +5,8 @@ import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { AISettingsPanel } from '@/features/ai-settings/components/AISettingsPanel';
 import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspacePage';
 import { UploadPage } from '@/features/knowledge/pages/UploadPage';
+import { PracticePage } from '@/features/practice/pages/PracticePage';
+import { ProgressDashboard } from '@/features/progress/pages/ProgressDashboard';
 
 function DashboardPage() {
   return (
@@ -73,6 +75,24 @@ export default function App() {
           element={
             <ProtectedRoute>
               <UploadPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/practice"
+          element={
+            <ProtectedRoute>
+              <PracticePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/progress"
+          element={
+            <ProtectedRoute>
+              <ProgressDashboard />
             </ProtectedRoute>
           }
         />
