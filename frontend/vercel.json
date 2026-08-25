@@ -1,0 +1,15 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "env": {
+    "VITE_API_BASE_URL": "@vite_api_base_url",
+    "VITE_GOOGLE_CLIENT_ID": "@vite_google_client_id",
+    "VITE_FRONTEND_URL": "@vite_frontend_url"
+  },
+  "routes": [
+    {
+      "src": "^/.*",
+      "dest": "/index.html"
+    }
+  ]
+}
