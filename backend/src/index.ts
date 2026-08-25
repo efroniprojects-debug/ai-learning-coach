@@ -91,40 +91,87 @@ async function startServer() {
     return { success: true };
   });
 
-  // Ask Question endpoint (demo - uses hardcoded Claude API key)
+  // Ask Question endpoint (supports Claude, Gemini, OpenAI)
   app.post('/api/v1/questions/ask', async (request, reply) => {
-    const { question } = request.body as { question: string };
+    const { question, provider } = request.body as { question: string; provider?: 'claude' | 'gemini' | 'openai' };
 
     if (!question) {
       return reply.status(400).send({ error: 'Question is required' });
     }
 
-    const apiKey = process.env.DEMO_CLAUDE_API_KEY;
-    if (!apiKey) {
-      return reply.status(400).send({
-        error: 'No AI provider configured. Set DEMO_CLAUDE_API_KEY environment variable.',
-      });
-    }
+    const detectedProvider = provider || 'claude';
+    const systemPrompt = 'You are an expert physics tutor. Explain concepts clearly and provide step-by-step solutions. Respond in Hebrew.';
 
     try {
-      const { Anthropic } = await import('@anthropic-ai/sdk');
-      const client = new Anthropic({ apiKey });
+      if (detectedProvider === 'claude') {
+        const apiKey = process.env.DEMO_CLAUDE_API_KEY;
+        if (!apiKey) {
+          return reply.status(400).send({ error: 'No Claude API key configured.' });
+        }
 
-      const response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        system: 'You are an expert physics tutor. Explain concepts clearly and provide step-by-step solutions. Respond in Hebrew.',
-        messages: [{ role: 'user', content: question }],
-      });
+        const { Anthropic } = await import('@anthropic-ai/sdk');
+        const client = new Anthropic({ apiKey });
+        const response = await client.messages.create({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: question }],
+        });
 
-      const content = response.content[0].type === 'text' ? response.content[0].text : '';
+        const content = response.content[0].type === 'text' ? response.content[0].text : '';
+        return {
+          content,
+          provider: 'claude' as const,
+          model: 'claude-3-5-sonnet-20241022',
+          tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+        };
+      } else if (detectedProvider === 'gemini') {
+        const apiKey = process.env.DEMO_GEMINI_API_KEY;
+        if (!apiKey) {
+          return reply.status(400).send({ error: 'No Gemini API key configured.' });
+        }
 
-      return {
-        content,
-        provider: 'claude' as const,
-        model: 'claude-3-5-sonnet-20241022',
-        tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
-      };
+        const { GoogleGenerativeAI } = await import('@google/generative-ai');
+        const client = new GoogleGenerativeAI(apiKey);
+        const model = client.getGenerativeModel({ model: 'gemini-1.5-pro' });
+
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: question }] }],
+          systemInstruction: systemPrompt,
+          generationConfig: { maxOutputTokens: 1024 },
+        });
+
+        const content = result.response.text();
+        const usage = result.response.usageMetadata;
+        return {
+          content,
+          provider: 'gemini' as const,
+          model: 'gemini-1.5-pro',
+          tokensUsed: (usage?.promptTokens || 0) + (usage?.candidatesTokens || 0),
+        };
+      } else if (detectedProvider === 'openai') {
+        const apiKey = process.env.DEMO_OPENAI_API_KEY;
+        if (!apiKey) {
+          return reply.status(400).send({ error: 'No OpenAI API key configured.' });
+        }
+
+        const { default: OpenAI } = await import('openai');
+        const client = new OpenAI({ apiKey });
+        const response = await client.chat.completions.create({
+          model: 'gpt-4o',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: question }],
+        });
+
+        const content = response.choices[0].message.content || '';
+        return {
+          content,
+          provider: 'openai' as const,
+          model: 'gpt-4o',
+          tokensUsed: response.usage?.prompt_tokens + response.usage?.completion_tokens,
+        };
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to get response from AI';
       return reply.status(500).send({ error: message });
