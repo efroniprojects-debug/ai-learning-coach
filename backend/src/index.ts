@@ -10,8 +10,15 @@ async function startServer() {
   });
 
   // Register CORS plugin
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://ai-learning-coach-cyan.vercel.app',
+    'https://ai-learning-coach-production.up.railway.app',
+  ];
+
   await app.register(cors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+    origin: allowedOrigins,
     credentials: true,
   });
 
