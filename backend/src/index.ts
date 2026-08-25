@@ -15,6 +15,18 @@ async function startServer() {
     credentials: true,
   });
 
+  // Root endpoint
+  app.get('/', async () => {
+    return {
+      name: 'AI Learning Coach Backend',
+      version: '0.1.0',
+      status: 'running',
+      timestamp: new Date().toISOString(),
+      docs: '/api/docs',
+      health: '/health'
+    };
+  });
+
   // Health check endpoint
   app.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
