@@ -67,10 +67,6 @@ async function startServer() {
     };
   });
 
-  app.post('/api/v1/questions/ask', async (request, reply) => {
-    reply.status(501).send({ error: 'Database not configured. Setup production deployment for full functionality.' });
-  });
-
   // AI Provider Config endpoints (mock for now)
   app.get('/api/v1/ai/providers', async (request, reply) => {
     return [];
