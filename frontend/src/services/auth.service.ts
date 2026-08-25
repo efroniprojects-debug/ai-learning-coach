@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import type { User, AuthTokens, LoginResponse, AIProviderConfig } from '@/types/auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 class AuthService {

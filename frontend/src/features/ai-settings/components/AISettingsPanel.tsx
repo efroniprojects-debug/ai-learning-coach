@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { authService } from '@/services/auth.service';
+import { ProviderGuide } from './ProviderGuide';
 import type { AIProviderConfig } from '@/types/auth';
 
 const aiSettingsSchema = z.object({
@@ -128,6 +129,9 @@ export function AISettingsPanel() {
           </select>
           {errors.provider && <p className="text-red-600 text-sm mt-1">{errors.provider.message}</p>}
         </div>
+
+        {/* Provider Guide */}
+        <ProviderGuide provider={selectedProvider as 'claude' | 'gemini' | 'openai'} />
 
         <div>
           <label className="block text-sm font-medium mb-1">מודל</label>
