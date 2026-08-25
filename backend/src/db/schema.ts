@@ -156,6 +156,104 @@ export const knowledgeChunks = pgTable(
   }
 );
 
+export const practiceAttempts = pgTable(
+  'practice_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    questionId: uuid('question_id').notNull(), // Reference to knowledge chunk or practice problem
+    submittedAnswer: text('submitted_answer'),
+    isCorrect: boolean('is_correct'),
+    score: integer('score'), // 0-100
+    timeSpentSeconds: integer('time_spent_seconds'),
+    feedback: text('feedback'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index('practice_attempts_user_id_idx').on(table.userId),
+      questionIdIdx: index('practice_attempts_question_id_idx').on(table.questionId),
+      createdAtIdx: index('practice_attempts_created_at_idx').on(table.createdAt),
+    };
+  }
+);
+
+export const skillMastery = pgTable(
+  'skill_mastery',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    conceptId: varchar('concept_id', { length: 255 }).notNull(), // Physics concept (force, acceleration, etc.)
+    eloRating: integer('elo_rating').default(1000),
+    attemptsCount: integer('attempts_count').default(0),
+    correctAttempts: integer('correct_attempts').default(0),
+    lastAttemptedAt: timestamp('last_attempted_at'),
+    confidenceLevel: varchar('confidence_level', { length: 20 }).default('novice'), // novice, intermediate, proficient, expert
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      userConceptIdx: uniqueIndex('skill_mastery_user_concept_idx').on(
+        table.userId,
+        table.conceptId
+      ),
+      eloIdx: index('skill_mastery_elo_idx').on(table.eloRating),
+      userIdIdx: index('skill_mastery_user_id_idx').on(table.userId),
+    };
+  }
+);
+
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: varchar('id', { length: 20 }).primaryKey(), // Short URL-safe ID
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    resourceType: varchar('resource_type', { length: 50 }).notNull(), // question, solution, progress_report
+    resourceId: uuid('resource_id').notNull(),
+    accessToken: varchar('access_token').notNull().unique(),
+    viewCount: integer('view_count').default(0),
+    expiresAt: timestamp('expires_at'),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index('share_links_user_id_idx').on(table.userId),
+      resourceIdx: index('share_links_resource_idx').on(table.resourceId),
+      expiresAtIdx: index('share_links_expires_at_idx').on(table.expiresAt),
+    };
+  }
+);
+
+export const progressSnapshots = pgTable(
+  'progress_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: timestamp('date').notNull(),
+    masteryLevels: jsonb('mastery_levels'), // concept_id -> elo_rating
+    attemptsToday: integer('attempts_today').default(0),
+    problemsSolved: integer('problems_solved').default(0),
+    timeSpentSeconds: integer('time_spent_seconds').default(0),
+    weakAreas: varchar('weak_areas', { length: 255 }).array(), // Concepts with low ELO
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      userDateIdx: uniqueIndex('progress_snapshots_user_date_idx').on(table.userId, table.date),
+      userIdIdx: index('progress_snapshots_user_id_idx').on(table.userId),
+    };
+  }
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AIProviderConfig = typeof aiProviderConfigs.$inferSelect;
@@ -168,3 +266,11 @@ export type UploadedFile = typeof uploadedFiles.$inferSelect;
 export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeChunks.$inferInsert;
+export type PracticeAttempt = typeof practiceAttempts.$inferSelect;
+export type NewPracticeAttempt = typeof practiceAttempts.$inferInsert;
+export type SkillMastery = typeof skillMastery.$inferSelect;
+export type NewSkillMastery = typeof skillMastery.$inferInsert;
+export type ShareLink = typeof shareLinks.$inferSelect;
+export type NewShareLink = typeof shareLinks.$inferInsert;
+export type ProgressSnapshot = typeof progressSnapshots.$inferSelect;
+export type NewProgressSnapshot = typeof progressSnapshots.$inferInsert;
