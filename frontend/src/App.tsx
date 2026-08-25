@@ -25,10 +25,13 @@ function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="border rounded-lg p-6">
+        <Link
+          to="/ask"
+          className="border rounded-lg p-6 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer"
+        >
           <h2 className="text-xl font-semibold mb-2">Ask a Question</h2>
-          <p className="text-gray-600">Coming soon...</p>
-        </div>
+          <p className="text-gray-600">Ask your AI tutor anything about physics</p>
+        </Link>
         <div className="border rounded-lg p-6">
           <h2 className="text-xl font-semibold mb-2">Practice</h2>
           <p className="text-gray-600">Coming soon...</p>
