@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node src/index.ts",
-    "build": "echo 'Build skipped'",
-    "start": "node src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/index.ts",
     "lint": "echo 'Lint skipped'",
     "type-check": "echo 'Type check skipped'",
     "test": "echo 'Tests skipped for MVP'"
@@ -20,6 +20,11 @@
     "zod": "3.22.0"
   },
   "devDependencies": {
-    "@types/node": "20.9.0"
+    "@types/node": "20.9.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
