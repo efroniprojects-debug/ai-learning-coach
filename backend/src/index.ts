@@ -138,12 +138,11 @@ async function startServer() {
         const result = await model.generateContent(question);
 
         const content = result.response.text();
-        const usage = result.response.usageMetadata;
         return {
           content,
           provider: 'gemini' as const,
           model: 'gemini-1.5-pro',
-          tokensUsed: (usage?.promptTokens || 0) + (usage?.candidatesTokens || 0),
+          tokensUsed: 0,
         };
       } else if (detectedProvider === 'openai') {
         const apiKey = process.env.DEMO_OPENAI_API_KEY;
