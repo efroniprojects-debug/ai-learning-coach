@@ -1,0 +1,61 @@
+{
+  "name": "ai-learning-coach",
+  "version": "0.1.0",
+  "description": "Adaptive learning platform for physics (Hebrew-first, extensible)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently 'npm run dev:frontend' 'npm run dev:backend'",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "preview": "cd frontend && npm run preview",
+    "type-check": "npm run type-check:frontend && npm run type-check:backend",
+    "type-check:frontend": "cd frontend && npm run type-check",
+    "type-check:backend": "cd backend && npm run type-check",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:backend": "cd backend && npm run lint",
+    "format": "npm run format:frontend && npm run format:backend",
+    "format:frontend": "cd frontend && npm run format",
+    "format:backend": "cd backend && npm run format",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd frontend && npm run test",
+    "test:backend": "cd backend && npm run test",
+    "test:e2e": "cd frontend && npm run test:e2e",
+    "check": "npm run type-check && npm run lint && npm run test",
+    "check-secrets": "git log -p | grep -E '^\\+.*api[_-]?key|^\\+.*secret|^\\+.*password' || echo 'No secrets found'",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "db:seed": "cd backend && npm run db:seed",
+    "db:reset": "cd backend && npm run db:reset",
+    "deploy:staging": "echo 'Staging deployment not yet implemented'",
+    "deploy:prod": "echo 'Production deployment not yet implemented'",
+    "clean": "npm run clean:frontend && npm run clean:backend",
+    "clean:frontend": "cd frontend && rm -rf node_modules dist .next .vite",
+    "clean:backend": "cd backend && rm -rf node_modules dist"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "ai",
+    "education",
+    "learning",
+    "tutoring",
+    "physics",
+    "hebrew",
+    "rtl"
+  ],
+  "author": "Sharon Afroni",
+  "license": "TBD"
+}
