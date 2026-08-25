@@ -1,6 +1,20 @@
 import axios, { AxiosInstance } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Get API URL from environment variable, or construct from window location
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // In development, use localhost:3001
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://localhost:3001';
+  }
+  // In production without env var, assume same origin (not recommended)
+  console.warn('VITE_API_URL not set. Please configure it in Vercel environment variables.');
+  return '';
+};
+
+const API_URL = getApiUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,
