@@ -3,6 +3,7 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { GoogleCallbackPage } from '@/features/auth/pages/GoogleCallbackPage';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { AISettingsPanel } from '@/features/ai-settings/components/AISettingsPanel';
+import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspacePage';
 
 function DashboardPage() {
   return (
@@ -53,6 +54,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <AISettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ask"
+          element={
+            <ProtectedRoute>
+              <QuestionWorkspacePage />
             </ProtectedRoute>
           }
         />
