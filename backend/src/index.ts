@@ -70,6 +70,30 @@ async function startServer() {
     reply.status(501).send({ error: 'Database not configured. Setup production deployment for full functionality.' });
   });
 
+  // AI Provider Config endpoints (mock for now)
+  app.get('/api/v1/ai/providers', async (request, reply) => {
+    return [];
+  });
+
+  app.post('/api/v1/ai/providers', async (request, reply) => {
+    const { provider, model, apiKey } = request.body as any;
+    return {
+      id: `config_${Date.now()}`,
+      provider,
+      model,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  app.put('/api/v1/ai/providers/:id/activate', async (request, reply) => {
+    return { success: true };
+  });
+
+  app.delete('/api/v1/ai/providers/:id', async (request, reply) => {
+    return { success: true };
+  });
+
   // Error handler
   app.setErrorHandler((error, request, reply) => {
     console.error(error);

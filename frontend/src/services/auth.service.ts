@@ -123,7 +123,7 @@ class AuthService {
    * Get AI provider configs
    */
   async getAIProviderConfigs(): Promise<AIProviderConfig[]> {
-    const { data } = await this.api.get<AIProviderConfig[]>('/api/v1/ai-settings/configs');
+    const { data } = await this.api.get<AIProviderConfig[]>('/api/v1/ai/providers');
     return data;
   }
 
@@ -135,7 +135,7 @@ class AuthService {
     model: string,
     apiKey: string
   ): Promise<AIProviderConfig> {
-    const { data } = await this.api.post<AIProviderConfig>('/api/v1/ai-settings/save', {
+    const { data } = await this.api.post<AIProviderConfig>('/api/v1/ai/providers', {
       provider,
       model,
       apiKey,
@@ -147,8 +147,8 @@ class AuthService {
    * Set active AI provider
    */
   async setActiveAIProvider(configId: string): Promise<AIProviderConfig> {
-    const { data } = await this.api.post<AIProviderConfig>(
-      `/api/v1/ai-settings/${configId}/activate`
+    const { data } = await this.api.put<AIProviderConfig>(
+      `/api/v1/ai/providers/${configId}/activate`
     );
     return data;
   }
@@ -157,7 +157,7 @@ class AuthService {
    * Delete AI provider config
    */
   async deleteAIProviderConfig(configId: string): Promise<void> {
-    await this.api.delete(`/api/v1/ai-settings/${configId}`);
+    await this.api.delete(`/api/v1/ai/providers/${configId}`);
   }
 }
 
