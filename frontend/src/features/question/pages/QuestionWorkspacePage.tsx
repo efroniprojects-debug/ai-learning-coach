@@ -7,6 +7,7 @@ export function QuestionWorkspacePage() {
   const [response, setResponse] = useState<QuestionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<'claude' | 'gemini' | 'openai'>('claude');
 
   const handleSubmitQuestion = async (text: string) => {
     setLoading(true);
@@ -19,7 +20,7 @@ export function QuestionWorkspacePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: text, provider }),
         credentials: 'include',
       });
 
@@ -44,6 +45,28 @@ export function QuestionWorkspacePage() {
         <p className="text-gray-600 mb-6">
           הקלד או העלה את השאלה שלך, והמורה האישי שלך יעזור לך להבין את הפתרון בשלבים.
         </p>
+
+        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <label className="block text-sm font-medium text-gray-700 mb-3">בחר ספק AI:</label>
+          <div className="flex gap-3">
+            {(['claude', 'gemini', 'openai'] as const).map((p) => (
+              <label key={p} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="provider"
+                  value={p}
+                  checked={provider === p}
+                  onChange={(e) => setProvider(e.target.value as typeof provider)}
+                  disabled={loading}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium capitalize">
+                  {p === 'claude' ? 'Claude' : p === 'gemini' ? 'Google Gemini' : 'OpenAI'}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
 
         <QuestionForm onSubmit={handleSubmitQuestion} disabled={loading} />
 
