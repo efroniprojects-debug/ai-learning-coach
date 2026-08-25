@@ -131,17 +131,41 @@ async function startServer() {
           return reply.status(400).send({ error: 'No Gemini API key configured.' });
         }
 
-        const { GoogleGenerativeAI } = await import('@google/generative-ai');
-        const client = new GoogleGenerativeAI(apiKey);
-        const model = client.getGenerativeModel({ model: 'gemini-pro' });
+        const modelName = 'gemini-1.0-pro';
+        const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
 
-        const result = await model.generateContent(question);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: question }],
+              },
+            ],
+            safetySettings: [
+              {
+                category: 'HARM_CATEGORY_UNSPECIFIED',
+                threshold: 'BLOCK_NONE',
+              },
+            ],
+          }),
+        });
 
-        const content = result.response.text();
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.error?.message || 'Gemini API failed');
+        }
+
+        const data = (await res.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
         return {
           content,
           provider: 'gemini' as const,
-          model: 'gemini-pro',
+          model: modelName,
           tokensUsed: 0,
         };
       } else if (detectedProvider === 'openai') {
