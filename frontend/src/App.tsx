@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { GoogleCallbackPage } from '@/features/auth/pages/GoogleCallbackPage';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
@@ -11,8 +11,18 @@ import { ProgressDashboard } from '@/features/progress/pages/ProgressDashboard';
 function DashboardPage() {
   return (
     <div className="max-w-4xl mx-auto py-12 px-4">
-      <h1 className="text-4xl font-bold mb-4">Dashboard</h1>
-      <p className="text-gray-600 mb-8">Welcome to AI Learning Coach</p>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold mb-4">Dashboard</h1>
+          <p className="text-gray-600">Welcome to AI Learning Coach</p>
+        </div>
+        <Link
+          to="/ai-settings"
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+        >
+          ⚙️ Settings
+        </Link>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="border rounded-lg p-6">
@@ -31,6 +41,9 @@ function DashboardPage() {
 function AISettingsPage() {
   return (
     <div className="max-w-4xl mx-auto py-12 px-4">
+      <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 mb-6 inline-block">
+        ← Back to Dashboard
+      </Link>
       <AISettingsPanel />
     </div>
   );
