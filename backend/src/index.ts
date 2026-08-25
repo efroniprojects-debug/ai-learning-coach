@@ -133,15 +133,9 @@ async function startServer() {
 
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
         const client = new GoogleGenerativeAI(apiKey);
-        const model = client.getGenerativeModel({
-          model: 'gemini-1.5-pro',
-          systemInstruction: systemPrompt,
-        });
+        const model = client.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
-        const result = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: question }] }],
-          generationConfig: { maxOutputTokens: 1024 },
-        });
+        const result = await model.generateContent(question);
 
         const content = result.response.text();
         const usage = result.response.usageMetadata;
