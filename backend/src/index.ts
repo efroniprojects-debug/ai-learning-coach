@@ -1,50 +1,55 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
-import { authRoutes } from '@/routes/auth.routes';
-import { aiSettingsRoutes } from '@/routes/ai-settings.routes';
-import { questionRoutes } from '@/routes/question.routes';
-import { uploadRoutes } from '@/routes/upload.routes';
-import { practiceRoutes } from '@/routes/practice.routes';
-import { sharingRoutes } from '@/routes/sharing.routes';
-import { progressRoutes } from '@/routes/progress.routes';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required');
-}
 
 async function startServer() {
   const app = Fastify({
     logger: true,
   });
 
-  // Register plugins
+  // Register CORS plugin
   await app.register(cors, {
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
   });
 
-  await app.register(jwt, {
-    secret: JWT_SECRET,
-  });
-
-  // Health check
+  // Health check endpoint
   app.get('/health', async () => {
-    return { status: 'ok' };
+    return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
-  // Register routes
-  await authRoutes(app);
-  await aiSettingsRoutes(app);
-  await questionRoutes(app);
-  await uploadRoutes(app);
-  await practiceRoutes(app);
-  await sharingRoutes(app);
-  await progressRoutes(app);
+  // Mock API endpoints for frontend to work
+  app.get('/api/v1/auth/verify', async (request, reply) => {
+    return {
+      isAuthenticated: false,
+      message: 'Backend running. Database not connected.'
+    };
+  });
+
+  app.post('/api/v1/auth/google/callback', async (request, reply) => {
+    reply.status(501).send({ error: 'Database not configured. Setup production deployment for full functionality.' });
+  });
+
+  app.get('/api/v1/practice/select-problem', async (request, reply) => {
+    return {
+      conceptId: 'Force',
+      difficulty: 3,
+      eloRating: 1200
+    };
+  });
+
+  app.get('/api/v1/progress/overview', async (request, reply) => {
+    return {
+      today: { attemptCount: 0, problemsSolved: 0, timeSpentSeconds: 0 },
+      mastery: { totalConcepts: 0, distribution: { novice: 0, intermediate: 0, proficient: 0, expert: 0 }, averageElo: 0 }
+    };
+  });
+
+  app.post('/api/v1/questions/ask', async (request, reply) => {
+    reply.status(501).send({ error: 'Database not configured. Setup production deployment for full functionality.' });
+  });
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {
@@ -54,7 +59,12 @@ async function startServer() {
 
   try {
     await app.listen({ host: HOST, port: PORT });
-    console.log(`Server running at http://${HOST}:${PORT}`);
+    console.log(`✅ Backend running at http://${HOST}:${PORT}`);
+    console.log(`📊 Health check: http://${HOST}:${PORT}/health`);
+    console.log(`🔗 Frontend: http://localhost:5173`);
+    console.log(`\n⚠️  Database not connected. For full functionality:`);
+    console.log(`   → Read: DEPLOYMENT_GUIDE.md`);
+    console.log(`   → Setup Supabase + configure DATABASE_URL`);
   } catch (err) {
     console.error(err);
     process.exit(1);
