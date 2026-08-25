@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { AIGateway } from './ai/AIGateway';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
@@ -92,6 +93,37 @@ async function startServer() {
 
   app.delete('/api/v1/ai/providers/:id', async (request, reply) => {
     return { success: true };
+  });
+
+  // Ask Question endpoint
+  app.post('/api/v1/questions/ask', async (request, reply) => {
+    const { question, context } = request.body as { question: string; context?: string };
+
+    if (!question) {
+      return reply.status(400).send({ error: 'Question is required' });
+    }
+
+    // For now, use a demo provider (in production, load from database)
+    const demoProvider = {
+      name: 'claude' as const,
+      apiKey: process.env.DEMO_CLAUDE_API_KEY || '',
+      model: 'claude-3-5-sonnet-20241022',
+    };
+
+    if (!demoProvider.apiKey) {
+      return reply.status(400).send({
+        error: 'No AI provider configured. Please add your API key in Settings.',
+      });
+    }
+
+    try {
+      const gateway = new AIGateway(demoProvider);
+      const response = await gateway.ask(question, context);
+      return response;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get response from AI';
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // Error handler

@@ -8,18 +8,19 @@ export function QuestionWorkspacePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmitQuestion = async (text: string, imageUrls?: string[]) => {
+  const handleSubmitQuestion = async (text: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch('/api/v1/questions/ask', {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/v1/questions/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
-        body: JSON.stringify({ text, imageUrls }),
+        body: JSON.stringify({ question: text }),
+        credentials: 'include',
       });
 
       if (!res.ok) {
