@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { AIGateway } from './ai/AIGateway';
+import { aiGateway } from './ai/gateway';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
@@ -95,31 +95,40 @@ async function startServer() {
     return { success: true };
   });
 
-  // Ask Question endpoint
+  // Ask Question endpoint (demo - uses hardcoded Claude API key)
   app.post('/api/v1/questions/ask', async (request, reply) => {
-    const { question, context } = request.body as { question: string; context?: string };
+    const { question } = request.body as { question: string };
 
     if (!question) {
       return reply.status(400).send({ error: 'Question is required' });
     }
 
-    // For now, use a demo provider (in production, load from database)
-    const demoProvider = {
-      name: 'claude' as const,
-      apiKey: process.env.DEMO_CLAUDE_API_KEY || '',
-      model: 'claude-3-5-sonnet-20241022',
-    };
-
-    if (!demoProvider.apiKey) {
+    const apiKey = process.env.DEMO_CLAUDE_API_KEY;
+    if (!apiKey) {
       return reply.status(400).send({
-        error: 'No AI provider configured. Please add your API key in Settings.',
+        error: 'No AI provider configured. Set DEMO_CLAUDE_API_KEY environment variable.',
       });
     }
 
     try {
-      const gateway = new AIGateway(demoProvider);
-      const response = await gateway.ask(question, context);
-      return response;
+      const { Anthropic } = await import('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey });
+
+      const response = await client.messages.create({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1024,
+        system: 'You are an expert physics tutor. Explain concepts clearly and provide step-by-step solutions. Respond in Hebrew.',
+        messages: [{ role: 'user', content: question }],
+      });
+
+      const content = response.content[0].type === 'text' ? response.content[0].text : '';
+
+      return {
+        content,
+        provider: 'claude' as const,
+        model: 'claude-3-5-sonnet-20241022',
+        tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to get response from AI';
       return reply.status(500).send({ error: message });
