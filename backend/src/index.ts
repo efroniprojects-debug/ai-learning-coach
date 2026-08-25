@@ -133,7 +133,7 @@ async function startServer() {
 
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
         const client = new GoogleGenerativeAI(apiKey);
-        const model = client.getGenerativeModel({ model: 'gemini-1.5-pro' });
+        const model = client.getGenerativeModel({ model: 'gemini-pro' });
 
         const result = await model.generateContent(question);
 
@@ -141,7 +141,7 @@ async function startServer() {
         return {
           content,
           provider: 'gemini' as const,
-          model: 'gemini-1.5-pro',
+          model: 'gemini-pro',
           tokensUsed: 0,
         };
       } else if (detectedProvider === 'openai') {
