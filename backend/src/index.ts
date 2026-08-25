@@ -153,7 +153,7 @@ async function startServer() {
         });
 
         if (!res.ok) {
-          const error = await res.json();
+          const error = (await res.json()) as { error?: { message?: string } };
           throw new Error(error.error?.message || 'Gemini API failed');
         }
 
