@@ -9,6 +9,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  vector,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -101,6 +102,60 @@ export const auditLogs = pgTable(
   }
 );
 
+export const uploadedFiles = pgTable(
+  'uploaded_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    fileSizeBytes: integer('file_size_bytes'),
+    mimeType: varchar('mime_type', { length: 100 }),
+    storageUrl: text('storage_url').notNull(),
+    contentExtracted: text('content_extracted'),
+    isProcessed: boolean('is_processed').default(false),
+    processingStatus: varchar('processing_status', { length: 50 }).default('pending'), // pending, processing, completed, failed
+    extractedConcepts: uuid('extracted_concepts').array(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index('uploaded_files_user_id_idx').on(table.userId),
+      statusIdx: index('uploaded_files_status_idx').on(table.processingStatus),
+      createdAtIdx: index('uploaded_files_created_at_idx').on(table.createdAt),
+    };
+  }
+);
+
+export const knowledgeChunks = pgTable(
+  'knowledge_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sourceType: varchar('source_type', { length: 50 }).notNull(), // exam, textbook, notebook, custom
+    sourceId: varchar('source_id', { length: 255 }),
+    sourceDocumentId: uuid('source_document_id').references(() => uploadedFiles.id, {
+      onDelete: 'set null',
+    }),
+    chunkText: text('chunk_text').notNull(),
+    chunkEmbedding: vector('chunk_embedding', { dimensions: 1536 }),
+    conceptIds: uuid('concept_ids').array(),
+    metadata: jsonb('metadata'), // page_number, section, citation, etc.
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => {
+    return {
+      sourceTypeIdx: index('knowledge_chunks_source_type_idx').on(table.sourceType),
+      sourceDocumentIdx: index('knowledge_chunks_source_document_idx').on(
+        table.sourceDocumentId
+      ),
+      createdAtIdx: index('knowledge_chunks_created_at_idx').on(table.createdAt),
+      // Vector similarity search index (for pgvector)
+      embeddingIdx: index('knowledge_chunks_embedding_idx', sql`USING hnsw (chunk_embedding vector_cosine_ops)`),
+    };
+  }
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AIProviderConfig = typeof aiProviderConfigs.$inferSelect;
@@ -109,3 +164,7 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type UploadedFile = typeof uploadedFiles.$inferSelect;
+export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
+export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
+export type NewKnowledgeChunk = typeof knowledgeChunks.$inferInsert;

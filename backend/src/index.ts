@@ -4,6 +4,7 @@ import jwt from '@fastify/jwt';
 import { authRoutes } from '@/routes/auth.routes';
 import { aiSettingsRoutes } from '@/routes/ai-settings.routes';
 import { questionRoutes } from '@/routes/question.routes';
+import { uploadRoutes } from '@/routes/upload.routes';
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
@@ -37,6 +38,7 @@ async function startServer() {
   await authRoutes(app);
   await aiSettingsRoutes(app);
   await questionRoutes(app);
+  await uploadRoutes(app);
 
   // Error handler
   app.setErrorHandler((error, request, reply) => {

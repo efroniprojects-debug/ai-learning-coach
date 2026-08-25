@@ -4,6 +4,7 @@ import { GoogleCallbackPage } from '@/features/auth/pages/GoogleCallbackPage';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { AISettingsPanel } from '@/features/ai-settings/components/AISettingsPanel';
 import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspacePage';
+import { UploadPage } from '@/features/knowledge/pages/UploadPage';
 
 function DashboardPage() {
   return (
@@ -63,6 +64,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <QuestionWorkspacePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute>
+              <UploadPage />
             </ProtectedRoute>
           }
         />
