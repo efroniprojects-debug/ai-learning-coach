@@ -133,11 +133,13 @@ async function startServer() {
 
         const { GoogleGenerativeAI } = await import('@google/generative-ai');
         const client = new GoogleGenerativeAI(apiKey);
-        const model = client.getGenerativeModel({ model: 'gemini-1.5-pro' });
+        const model = client.getGenerativeModel({
+          model: 'gemini-1.5-pro',
+          systemInstruction: systemPrompt,
+        });
 
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: question }] }],
-          systemInstruction: systemPrompt,
           generationConfig: { maxOutputTokens: 1024 },
         });
 
@@ -160,16 +162,20 @@ async function startServer() {
         const response = await client.chat.completions.create({
           model: 'gpt-4o',
           max_tokens: 1024,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: question }],
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: question },
+          ],
         });
 
         const content = response.choices[0].message.content || '';
+        const inputTokens = response.usage?.prompt_tokens || 0;
+        const outputTokens = response.usage?.completion_tokens || 0;
         return {
           content,
           provider: 'openai' as const,
           model: 'gpt-4o',
-          tokensUsed: response.usage?.prompt_tokens + response.usage?.completion_tokens,
+          tokensUsed: inputTokens + outputTokens,
         };
       }
     } catch (error) {
