@@ -83,3 +83,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ error: null });
   },
 }));
+
+export const useAuth = useAuthStore;

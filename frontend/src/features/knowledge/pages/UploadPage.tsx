@@ -31,8 +31,8 @@ export function UploadPage() {
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
+      if (!response.ok) {
+        const data = await response.json();
         throw new Error(data.error || 'Upload failed');
       }
 
