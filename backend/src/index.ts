@@ -117,77 +117,47 @@ async function startServer() {
     }
   });
 
-  // ─── Auth: Verify JWT ─────────────────────────────────────────────────────
-  app.get('/api/v1/auth/verify', async (request, reply) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return reply.status(401).send({ error: 'Missing authorization header' });
-    }
-
-    if (!jwtAvailable) {
-      return reply.status(503).send({ error: 'JWT not configured' });
-    }
-
-    try {
-      const { JWTService } = await import('@/services/jwt.service');
-      const payload = JWTService.verifyAccessToken(authHeader.substring(7));
-
-      if (dbAvailable) {
-        const { db, users } = await import('@/db');
-        const { eq } = await import('drizzle-orm');
-        const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
-        if (user) {
-          return reply.status(200).send({
-            id: user.id,
-            email: user.email,
-            displayName: user.displayName,
-            profilePicture: user.profilePicture,
-            language: user.language,
-            theme: user.theme,
-            focusModeEnabled: user.focusModeEnabled,
-            createdAt: user.createdAt?.toISOString(),
-            updatedAt: user.updatedAt?.toISOString(),
-          });
-        }
-      }
-
-      return reply.status(200).send({ id: payload.userId, email: payload.email, displayName: 'User' });
-    } catch {
-      return reply.status(401).send({ error: 'Invalid or expired token' });
-    }
-  });
-
-  // ─── Auth: Google OAuth (only if credentials configured) ──────────────────
+  // ─── Auth: Google OAuth ───────────────────────────────────────────────────
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL) {
     const { authRoutes } = await import('./routes/auth.routes');
     await app.register(authRoutes);
     app.log.info('Google OAuth routes registered');
   } else {
+    // Fallback routes when Google OAuth is not configured
     app.post('/api/v1/auth/google/callback', async (_req, reply) => {
       reply.status(503).send({ error: 'Google OAuth not configured. Use /api/v1/auth/demo-login.' });
     });
+    app.get('/api/v1/auth/verify', async (request, reply) => {
+      const authHeader = request.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ') || !jwtAvailable) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+      try {
+        const { JWTService } = await import('@/services/jwt.service');
+        const payload = JWTService.verifyAccessToken(authHeader.substring(7));
+        return reply.status(200).send({ id: payload.userId, email: payload.email, displayName: 'User' });
+      } catch {
+        return reply.status(401).send({ error: 'Invalid or expired token' });
+      }
+    });
+    app.post('/api/v1/auth/logout', async (_req, reply) => {
+      reply.status(200).send({ success: true });
+    });
+    app.post('/api/v1/auth/refresh', async (request, reply) => {
+      const authHeader = request.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ') || !jwtAvailable) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+      try {
+        const { JWTService } = await import('@/services/jwt.service');
+        const payload = JWTService.verifyAccessToken(authHeader.substring(7));
+        const newToken = JWTService.generateAccessToken({ userId: payload.userId, email: payload.email });
+        return reply.status(200).send({ accessToken: newToken, expiresIn: 900 });
+      } catch {
+        return reply.status(401).send({ error: 'Invalid token' });
+      }
+    });
   }
-
-  // ─── Auth: Logout ─────────────────────────────────────────────────────────
-  app.post('/api/v1/auth/logout', async (_req, reply) => {
-    reply.status(200).send({ success: true });
-  });
-
-  // ─── Auth: Refresh (minimal - returns same token) ─────────────────────────
-  app.post('/api/v1/auth/refresh', async (request, reply) => {
-    const authHeader = request.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ') || !jwtAvailable) {
-      return reply.status(401).send({ error: 'Unauthorized' });
-    }
-    try {
-      const { JWTService } = await import('@/services/jwt.service');
-      const payload = JWTService.verifyAccessToken(authHeader.substring(7));
-      const newToken = JWTService.generateAccessToken({ userId: payload.userId, email: payload.email });
-      return reply.status(200).send({ accessToken: newToken, expiresIn: 900 });
-    } catch {
-      return reply.status(401).send({ error: 'Invalid token' });
-    }
-  });
 
   // ─── AI Settings (BYOK) ───────────────────────────────────────────────────
   if (dbAvailable && jwtAvailable && encryptionAvailable) {
