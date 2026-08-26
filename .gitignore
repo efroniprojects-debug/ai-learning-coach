@@ -54,3 +54,7 @@ temp/
 
 # API keys (never commit)
 .claude.json
+
+# Exam files — large local data, not deployed
+imported tests/
+imported/

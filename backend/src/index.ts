@@ -33,8 +33,11 @@ async function startServer() {
 
   try {
     const { db, users } = await import('@/db');
-    // Actually test the connection, not just module load
-    await db.select({ id: users.id }).from(users).limit(1);
+    // Test the connection with a timeout so slow DB doesn't delay startup
+    await Promise.race([
+      db.select({ id: users.id }).from(users).limit(1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB connection timeout')), 5000)),
+    ]);
     dbAvailable = true;
   } catch (e) {
     app.log.warn('Database not available: ' + (e instanceof Error ? e.message : String(e)));
