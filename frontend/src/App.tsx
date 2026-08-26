@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { GoogleCallbackPage } from '@/features/auth/pages/GoogleCallbackPage';
@@ -7,6 +8,7 @@ import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspa
 import { UploadPage } from '@/features/knowledge/pages/UploadPage';
 import { PracticePage } from '@/features/practice/pages/PracticePage';
 import { ProgressDashboard } from '@/features/progress/pages/ProgressDashboard';
+import { BagruyotSidebar } from '@/components/BagruyotSidebar';
 
 function DashboardPage() {
   return (
@@ -52,6 +54,15 @@ function AISettingsPage() {
   );
 }
 
+function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <BagruyotSidebar />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -63,7 +74,9 @@ export default function App() {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <DashboardPage />
+              <AuthenticatedLayout>
+                <DashboardPage />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
@@ -72,7 +85,9 @@ export default function App() {
           path="/ai-settings"
           element={
             <ProtectedRoute>
-              <AISettingsPage />
+              <AuthenticatedLayout>
+                <AISettingsPage />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
@@ -81,7 +96,9 @@ export default function App() {
           path="/ask"
           element={
             <ProtectedRoute>
-              <QuestionWorkspacePage />
+              <AuthenticatedLayout>
+                <QuestionWorkspacePage />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
@@ -90,7 +107,9 @@ export default function App() {
           path="/upload"
           element={
             <ProtectedRoute>
-              <UploadPage />
+              <AuthenticatedLayout>
+                <UploadPage />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
@@ -99,7 +118,9 @@ export default function App() {
           path="/practice"
           element={
             <ProtectedRoute>
-              <PracticePage />
+              <AuthenticatedLayout>
+                <PracticePage />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
@@ -108,7 +129,9 @@ export default function App() {
           path="/progress"
           element={
             <ProtectedRoute>
-              <ProgressDashboard />
+              <AuthenticatedLayout>
+                <ProgressDashboard />
+              </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
