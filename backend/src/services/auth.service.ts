@@ -35,18 +35,25 @@ export class AuthService {
    */
   static async exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse> {
     const { clientId, clientSecret, callbackUrl } = getGoogleCreds();
-    const response = await axios.post<GoogleTokenResponse>(
-      'https://oauth2.googleapis.com/token',
-      {
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: callbackUrl,
-        grant_type: 'authorization_code',
+    try {
+      const response = await axios.post<GoogleTokenResponse>(
+        'https://oauth2.googleapis.com/token',
+        {
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: callbackUrl,
+          grant_type: 'authorization_code',
+        }
+      );
+      return response.data;
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response) {
+        const googleError = err.response.data as { error?: string; error_description?: string };
+        throw new Error(`Google token exchange failed: ${googleError.error} — ${googleError.error_description}`);
       }
-    );
-
-    return response.data;
+      throw err;
+    }
   }
 
   /**

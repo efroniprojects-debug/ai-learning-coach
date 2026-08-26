@@ -27,6 +27,7 @@ export async function authRoutes(app: FastifyInstance) {
         }
 
         const message = error instanceof Error ? error.message : 'Authentication failed';
+        request.log.error({ err: error }, `Google OAuth callback failed: ${message}`);
         reply.status(400).send({ error: message });
       }
     }
