@@ -7,10 +7,11 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
-// Create connection pool
+// Create connection pool — Supabase requires SSL
 const client = postgres(databaseUrl, {
   max: 10,
   idle_timeout: 30,
+  ssl: databaseUrl.includes('supabase') ? { rejectUnauthorized: false } : undefined,
 });
 
 // Create database instance

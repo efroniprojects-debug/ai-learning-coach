@@ -32,7 +32,9 @@ async function startServer() {
   let encryptionAvailable = false;
 
   try {
-    await import('@/db');
+    const { db, users } = await import('@/db');
+    // Actually test the connection, not just module load
+    await db.select({ id: users.id }).from(users).limit(1);
     dbAvailable = true;
   } catch (e) {
     app.log.warn('Database not available: ' + (e instanceof Error ? e.message : String(e)));
@@ -76,7 +78,13 @@ async function startServer() {
         const { db, users } = await import('@/db');
         const { eq } = await import('drizzle-orm');
 
-        let user = await db.query.users.findFirst({ where: eq(users.email, demoEmail) });
+        const [existingUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, demoEmail))
+          .limit(1);
+
+        let user = existingUser;
 
         if (!user) {
           const [newUser] = await db
@@ -101,6 +109,7 @@ async function startServer() {
         tokens: { accessToken, refreshToken, expiresIn: 900 },
       });
     } catch (err) {
+      app.log.error({ err }, 'Demo login failed');
       return reply.status(500).send({ error: err instanceof Error ? err.message : 'Demo login failed' });
     }
   });
@@ -123,7 +132,7 @@ async function startServer() {
       if (dbAvailable) {
         const { db, users } = await import('@/db');
         const { eq } = await import('drizzle-orm');
-        const user = await db.query.users.findFirst({ where: eq(users.id, payload.userId) });
+        const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
         if (user) {
           return reply.status(200).send({
             id: user.id,
