@@ -288,7 +288,7 @@ async function startServer() {
         });
 
       } else if (provider === 'gemini') {
-        const modelName = 'gemini-1.0-pro';
+        const modelName = 'gemini-1.5-flash';
         const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
         const res = await fetch(url, {
           method: 'POST',
