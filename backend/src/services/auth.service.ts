@@ -1,5 +1,6 @@
 import { db, users, sessions } from '@/db';
 import { eq } from 'drizzle-orm';
+// NOTE: never use db.query.* — requires relations setup; use db.select().from().where().limit()
 import { JWTService } from './jwt.service';
 import axios from 'axios';
 import crypto from 'crypto';
@@ -83,9 +84,8 @@ export class AuthService {
     const googleUser = await this.getGoogleUserInfo(googleTokens.access_token);
 
     // Find or create user
-    let user = await db.query.users.findFirst({
-      where: eq(users.googleId, googleUser.id),
-    });
+    const [existingUser] = await db.select().from(users).where(eq(users.googleId, googleUser.id)).limit(1);
+    let user = existingUser;
 
     if (!user) {
       // Create new user
@@ -169,18 +169,14 @@ export class AuthService {
     // Check if session exists (optional, for extra security)
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.refreshTokenHash, refreshTokenHash),
-    });
+    const [session] = await db.select().from(sessions).where(eq(sessions.refreshTokenHash, refreshTokenHash)).limit(1);
 
     if (!session) {
       throw new Error('Session not found');
     }
 
     // Generate new access token
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!user) {
       throw new Error('User not found');
@@ -202,9 +198,7 @@ export class AuthService {
    * Get user by ID
    */
   static async getUserById(userId: string) {
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!user) {
       throw new Error('User not found');
