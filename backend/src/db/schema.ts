@@ -251,6 +251,42 @@ export const progressSnapshots = pgTable(
   }
 );
 
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: varchar('title', { length: 500 }),
+    subject: varchar('subject', { length: 50 }).default('physics'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table: any) => ({
+    userIdIdx: index('conversations_user_id_idx').on(table.userId),
+    createdAtIdx: index('conversations_created_at_idx').on(table.createdAt),
+  })
+);
+
+export const conversationMessages = pgTable(
+  'conversation_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: varchar('role', { length: 20 }).notNull(), // 'user' | 'assistant'
+    content: text('content').notNull(),
+    structuredData: jsonb('structured_data'), // Parsed TutorStructuredResponse for assistant messages
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table: any) => ({
+    conversationIdx: index('conv_messages_conversation_idx').on(table.conversationId),
+    createdAtIdx: index('conv_messages_created_at_idx').on(table.createdAt),
+  })
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AIProviderConfig = typeof aiProviderConfigs.$inferSelect;
@@ -271,3 +307,7 @@ export type ShareLink = typeof shareLinks.$inferSelect;
 export type NewShareLink = typeof shareLinks.$inferInsert;
 export type ProgressSnapshot = typeof progressSnapshots.$inferSelect;
 export type NewProgressSnapshot = typeof progressSnapshots.$inferInsert;
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type NewConversationMessage = typeof conversationMessages.$inferInsert;

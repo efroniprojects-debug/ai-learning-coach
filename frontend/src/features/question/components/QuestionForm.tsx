@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 interface QuestionFormProps {
-  onSubmit: (text: string) => Promise<void>;
+  onSubmit: (text: string) => void | Promise<void>;
   disabled?: boolean;
+  placeholder?: string;
 }
 
-export function QuestionForm({ onSubmit, disabled }: QuestionFormProps) {
+export function QuestionForm({ onSubmit, disabled, placeholder }: QuestionFormProps) {
   const [question, setQuestion] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,7 +27,7 @@ export function QuestionForm({ onSubmit, disabled }: QuestionFormProps) {
         value={question}
         onChange={(e) => setQuestion(e.target.value)}
         disabled={disabled}
-        placeholder="כתוב את השאלה שלך כאן..."
+        placeholder={placeholder ?? 'כתוב את השאלה שלך כאן...'}
         className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
       />
 

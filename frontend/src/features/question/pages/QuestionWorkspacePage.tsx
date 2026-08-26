@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
-import { apiClient } from '@/services/api.client';
-import type { QuestionResponse } from '../types';
+import type { TutorResponse } from '../types';
 
 type Provider = 'claude' | 'gemini' | 'openai';
 
@@ -13,50 +12,141 @@ const PROVIDERS: { id: Provider; label: string; description: string }[] = [
   { id: 'openai', label: 'GPT-4o', description: 'OpenAI' },
 ];
 
-export function QuestionWorkspacePage() {
-  const [response, setResponse] = useState<QuestionResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<Provider>('gemini');
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
-  const handleSubmitQuestion = async (text: string) => {
-    setLoading(true);
+export function QuestionWorkspacePage() {
+  const token = localStorage.getItem('accessToken') ?? '';
+
+  const [response, setResponse] = useState<TutorResponse | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamText, setStreamText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<Provider>('claude');
+  const [isFollowUp, setIsFollowUp] = useState(false);
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleSubmitQuestion = useCallback(async (text: string) => {
+    // Cancel any in-progress stream
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     setError(null);
+    setIsStreaming(true);
+    setStreamText('');
     setResponse(null);
 
     try {
-      const { data } = await apiClient.post<QuestionResponse>('/api/v1/questions/ask', {
-        question: text,
-        provider,
+      const res = await fetch(`${API_BASE}/api/v1/questions/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text,
+          subjectId: 'physics',
+          conversationId: isFollowUp ? conversationId : undefined,
+        }),
+        signal: abortRef.current.signal,
       });
-      setResponse(data);
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'שגיאה לא צפויה';
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+
+          let event: Record<string, unknown>;
+          try { event = JSON.parse(raw); } catch { continue; }
+
+          if (event.type === 'delta') {
+            setStreamText((prev) => prev + (event.text as string));
+          } else if (event.type === 'done') {
+            const data = event as unknown as {
+              type: 'done';
+              conversationId: string;
+              messageId: string;
+              structured: TutorResponse;
+              sources: TutorResponse['sources'];
+            };
+            const structured: TutorResponse = {
+              ...data.structured,
+              conversationId: data.conversationId,
+              messageId: data.messageId,
+              sources: data.sources,
+            };
+            setResponse(structured);
+            setConversationId(data.conversationId);
+            setIsStreaming(false);
+          } else if (event.type === 'error') {
+            throw new Error(event.message as string || 'Stream error');
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if ((err as Error).name === 'AbortError') return;
+      const msg =
+        err instanceof Error ? err.message : 'שגיאה לא צפויה';
       setError(msg);
-    } finally {
-      setLoading(false);
+      setIsStreaming(false);
     }
+  }, [token, conversationId, isFollowUp]);
+
+  const handleNewConversation = () => {
+    setConversationId(null);
+    setResponse(null);
+    setStreamText('');
+    setError(null);
+    setIsFollowUp(false);
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
+    <div className="max-w-6xl mx-auto py-8 px-4" dir="rtl">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 text-sm">
-          ← חזרה לדשבורד
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">שאל שאלה בפיזיקה</h1>
-          <p className="text-sm text-gray-500">המורה האישי שלך יסביר שלב אחרי שלב</p>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 text-sm">
+            → חזרה לדשבורד
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">שאל שאלה בפיזיקה</h1>
+            <p className="text-sm text-gray-500">המורה האישי שלך יסביר שלב אחרי שלב</p>
+          </div>
         </div>
+        {conversationId && (
+          <button
+            onClick={handleNewConversation}
+            className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded-lg"
+          >
+            + שיחה חדשה
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Input */}
-        <div className="space-y-6">
+        {/* ── Input column ── */}
+        <div className="space-y-4">
           {/* Provider selector */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">בחר ספק AI:</p>
+            <p className="text-sm font-medium text-gray-700 mb-3">ספק AI:</p>
             <div className="flex gap-3 flex-wrap">
               {PROVIDERS.map((p) => (
                 <label
@@ -73,7 +163,7 @@ export function QuestionWorkspacePage() {
                     value={p.id}
                     checked={provider === p.id}
                     onChange={() => setProvider(p.id)}
-                    disabled={loading}
+                    disabled={isStreaming}
                     className="sr-only"
                   />
                   <span className="font-medium">{p.label}</span>
@@ -85,12 +175,32 @@ export function QuestionWorkspacePage() {
             </div>
           </div>
 
-          <QuestionForm onSubmit={handleSubmitQuestion} disabled={loading} />
+          {/* Follow-up toggle (shown after first answer) */}
+          {conversationId && response && (
+            <label className="flex items-center gap-3 cursor-pointer p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <input
+                type="checkbox"
+                checked={isFollowUp}
+                onChange={(e) => setIsFollowUp(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded"
+              />
+              <div>
+                <p className="text-sm font-medium text-blue-800">שאלת המשך</p>
+                <p className="text-xs text-blue-600">שמור על ההקשר של השיחה הנוכחית</p>
+              </div>
+            </label>
+          )}
+
+          <QuestionForm
+            onSubmit={handleSubmitQuestion}
+            disabled={isStreaming}
+            placeholder={isFollowUp ? 'שאל שאלת המשך...' : 'מה זה כוח? מה ההבדל בין מסה למשקל?'}
+          />
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm" dir="rtl">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               <strong>שגיאה: </strong>{error}
-              {error.includes('No API key') && (
+              {error.includes('API key') && (
                 <div className="mt-2">
                   <Link to="/ai-settings" className="underline text-red-600">
                     → הגדר מפתח API בהגדרות
@@ -99,23 +209,30 @@ export function QuestionWorkspacePage() {
               )}
             </div>
           )}
+
+          {/* Conversation context indicator */}
+          {conversationId && (
+            <div className="text-xs text-gray-400 text-center">
+              שיחה פעילה · {isFollowUp ? 'שאלת המשך בהקשר' : 'שאלה חדשה'}
+            </div>
+          )}
         </div>
 
-        {/* Right: Response */}
+        {/* ── Response column ── */}
         <div>
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-80 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4" />
-              <p className="text-gray-500 text-sm">
-                {provider === 'claude' ? 'Claude' : provider === 'gemini' ? 'Gemini' : 'GPT-4o'} חושב...
-              </p>
-            </div>
+          {isStreaming ? (
+            <ResponseDisplay
+              response={{ conversationId: '', messageId: '', explanation: '', steps: [], hints: [], misconceptions: [], sources: [] }}
+              isStreaming
+              streamText={streamText}
+            />
           ) : response ? (
-            <ResponseDisplay response={response} questionText="" />
+            <ResponseDisplay response={response} />
           ) : (
-            <div className="flex flex-col items-center justify-center h-80 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-400">
+            <div className="flex flex-col items-center justify-center h-80 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400">
               <span className="text-4xl mb-3">🎓</span>
               <p className="text-sm">התשובה תופיע כאן</p>
+              <p className="text-xs mt-1 text-gray-300">עם הסבר, צעדים ורמזים</p>
             </div>
           )}
         </div>

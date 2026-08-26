@@ -1,178 +1,328 @@
+import { z } from 'zod';
+import { db, conversations, conversationMessages } from '@/db';
+import { eq, asc } from 'drizzle-orm';
 import { aiGateway } from '@/ai/gateway';
-import type { KnowledgeChunk } from '@/ai/types';
+import { getSubjectConfig } from '@/config/subjects';
+import type { KnowledgeChunk, AIMessage } from '@/ai/types';
 
-const TUTOR_SYSTEM_PROMPT = `אתה מורה פרטי בעל AI שמסביר מושגים בפיזיקה לתלמידים בכיתות י'-י"ב.
+// ── Structured response schema (Zod) ─────────────────────────────────────────
 
-עקרונות ההוראה שלך:
-1. **אינטואיציה קודם** — התחל בהסבר של מה בעצם קורה, לא בנוסחה.
-2. **שלב אחרי שלב** — פרק בעיות לצעדים ברורים וקטנים.
-3. **הנח שאלות** — בדוק הבנה על ידי שאלות, לא על ידי מענה ישיר.
-4. **צטט מקורות** — כשאתה משתמש בחומר, צטט: "לפי [מקור], ..."
-5. **היה סקרן** — כשהתלמיד טועה, שאל "מה גרם לך לחשוב כך?"
-6. **בעברית ברורה** — הסברים קצרים, מילים פשוטות.
+export const TutorStepSchema = z.object({
+  number: z.number().int().positive(),
+  title: z.string().min(1),
+  content: z.string().min(1),
+});
 
-תמיד צטט את מקורות הידע שלך מחומרי הלימוד.`;
+export const TutorMisconceptionSchema = z.object({
+  misconception: z.string().min(1),
+  correction: z.string().min(1),
+});
+
+export const TutorStructuredResponseSchema = z.object({
+  explanation: z.string().min(1),
+  steps: z.array(TutorStepSchema).min(1),
+  hints: z.array(z.string()).min(1).max(5),
+  misconceptions: z.array(TutorMisconceptionSchema).optional().default([]),
+  socraticQuestion: z.string().optional(),
+});
+
+export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
 export interface TutorQuestion {
   text: string;
   imageUrls?: string[];
   userId: string;
-  topicHint?: string;
+  subjectId?: string;
+  conversationId?: string; // If follow-up question
 }
 
-export interface TutorResponse {
-  explanation: string;
-  sourceChunks: Array<{
-    id: string;
-    text: string;
-    source: string;
-  }>;
-  hint?: string;
+export interface TutorFullResponse {
+  structured: TutorStructuredResponse;
+  conversationId: string;
+  messageId: string;
+  sourceChunks: Array<{ id: string; text: string; source: string }>;
+  rawText: string;
 }
+
+// ── Context window: max messages to include in history ───────────────────────
+const MAX_HISTORY_MESSAGES = 6; // 3 user + 3 assistant turns
+
+// ── Main service ─────────────────────────────────────────────────────────────
 
 export class TutorService {
   /**
-   * Answer a physics question with RAG context
+   * Answer a question (non-streaming).
+   * Creates or continues a conversation, stores messages in DB.
    */
   static async answerQuestion(
     question: TutorQuestion,
     ragContext: KnowledgeChunk[]
-  ): Promise<TutorResponse> {
-    // Initialize gateway for user
+  ): Promise<TutorFullResponse> {
+    const subjectId = question.subjectId ?? 'physics';
+    const subject = getSubjectConfig(subjectId);
+
     await aiGateway.initializeForUser(question.userId);
 
-    // Build context from knowledge chunks
+    // Get or create conversation
+    const convId = await this.getOrCreateConversation(
+      question.userId,
+      question.text,
+      subjectId,
+      question.conversationId
+    );
+
+    // Build message history for context window
+    const history = await this.loadHistory(convId);
+
+    // Build current user message
     const contextText = this.buildContextFromChunks(ragContext);
+    const userMessageContent = this.buildUserPrompt(question.text, contextText);
 
-    // Build user prompt
-    const userPrompt = `
-שאלה: ${question.text}
+    // Save user message to DB
+    const [savedUserMsg] = await db
+      .insert(conversationMessages)
+      .values({ conversationId: convId, role: 'user', content: userMessageContent })
+      .returning({ id: conversationMessages.id });
 
-${question.topicHint ? `נושא רלוונטי: ${question.topicHint}` : ''}
+    // Build messages array for AI (history + current)
+    const messages: AIMessage[] = [
+      ...history,
+      { role: 'user', content: userMessageContent },
+    ];
 
-חומר הלימוד הרלוונטי:
-${contextText}
+    // Call AI
+    const aiResponse = await aiGateway.generateResponse({
+      messages,
+      systemPrompt: subject.systemPrompt,
+      maxTokens: 2048,
+      temperature: 0.7,
+    });
 
-אנא הסבר את הפתרון בשיטת Socratic:
-1. התחל בשאלה שמעודדת חשיבה
-2. הסבר את האינטואיציה
-3. הראה את השלבים
-4. לא תן מיד את התשובה, תן לתלמיד לחשוב
+    // Parse structured response
+    const structured = this.parseStructuredResponse(aiResponse.content);
 
-צטט את המקורות שלך מהחומר שנמסר.`;
+    // Save assistant message to DB
+    const [savedAssistantMsg] = await db
+      .insert(conversationMessages)
+      .values({
+        conversationId: convId,
+        role: 'assistant',
+        content: aiResponse.content,
+        structuredData: structured,
+      })
+      .returning({ id: conversationMessages.id });
 
-    try {
-      const response = await aiGateway.generateResponse({
-        messages: [
-          {
-            role: 'user',
-            content: userPrompt,
-          },
-        ],
-        systemPrompt: TUTOR_SYSTEM_PROMPT,
-        maxTokens: 1500,
-        temperature: 0.7,
-      });
+    // Update conversation timestamp
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, convId));
 
-      return {
-        explanation: response.content,
-        sourceChunks: ragContext.map((chunk) => ({
-          id: chunk.id,
-          text: chunk.text.substring(0, 200), // Truncate for display
-          source: chunk.source,
-        })),
-      };
-    } catch (error) {
-      throw new Error(
-        `Failed to generate tutoring response: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    return {
+      structured,
+      conversationId: convId,
+      messageId: savedAssistantMsg.id,
+      rawText: aiResponse.content,
+      sourceChunks: ragContext.map((c) => ({
+        id: c.id,
+        text: c.text.substring(0, 200),
+        source: c.source,
+      })),
+    };
   }
 
   /**
-   * Generate a hint for a question
+   * Stream an answer via async generator (for SSE endpoint).
+   * Saves the complete response to DB when done.
+   */
+  static async *streamAnswer(
+    question: TutorQuestion,
+    ragContext: KnowledgeChunk[]
+  ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
+    const subjectId = question.subjectId ?? 'physics';
+    const subject = getSubjectConfig(subjectId);
+
+    await aiGateway.initializeForUser(question.userId);
+
+    const convId = await this.getOrCreateConversation(
+      question.userId,
+      question.text,
+      subjectId,
+      question.conversationId
+    );
+
+    const history = await this.loadHistory(convId);
+    const contextText = this.buildContextFromChunks(ragContext);
+    const userMessageContent = this.buildUserPrompt(question.text, contextText);
+
+    await db
+      .insert(conversationMessages)
+      .values({ conversationId: convId, role: 'user', content: userMessageContent });
+
+    const messages: AIMessage[] = [
+      ...history,
+      { role: 'user', content: userMessageContent },
+    ];
+
+    let fullText = '';
+
+    for await (const chunk of aiGateway.generateStream({
+      messages,
+      systemPrompt: subject.systemPrompt,
+      maxTokens: 2048,
+      temperature: 0.7,
+    })) {
+      fullText += chunk.delta;
+      yield { type: 'delta', text: chunk.delta };
+    }
+
+    // Parse and save after streaming completes
+    const structured = this.parseStructuredResponse(fullText);
+
+    const [savedMsg] = await db
+      .insert(conversationMessages)
+      .values({
+        conversationId: convId,
+        role: 'assistant',
+        content: fullText,
+        structuredData: structured,
+      })
+      .returning({ id: conversationMessages.id });
+
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, convId));
+
+    yield {
+      type: 'done',
+      data: {
+        structured,
+        conversationId: convId,
+        messageId: savedMsg.id,
+        rawText: fullText,
+        sourceChunks: ragContext.map((c) => ({
+          id: c.id,
+          text: c.text.substring(0, 200),
+          source: c.source,
+        })),
+      },
+    };
+  }
+
+  /**
+   * Generate a progressive hint (doesn't start new conversation).
    */
   static async generateHint(
-    question: string,
+    questionText: string,
     previousExplanation: string,
-    ragContext: KnowledgeChunk[]
+    ragContext: KnowledgeChunk[],
+    userId: string = ''
   ): Promise<string> {
-    await aiGateway.initializeForUser(''); // Use default user context
+    if (userId) await aiGateway.initializeForUser(userId);
 
     const hintPrompt = `
-שאלה המקורית: ${question}
+שאלה מקורית: ${questionText}
 
-ההסבר הקודם:
+ההסבר הקודם שנתת:
 ${previousExplanation}
 
-תן רמז קצר וחכם שיעודד את התלמיד לחשוב בעצמו, בלי לתת ישר את התשובה.
-רמז צריך להיות:
-- קצר (משפט או שניים)
-- מעודד חשיבה עצמאית
-- קשור לאינטואיציה של המושג`;
+תן רמז אחד קצר (משפט-שניים) שמוביל את התלמיד לחשוב בעצמו.
+• לא לתת את התשובה
+• להתמקד באינטואיציה
+• לענות בעברית בלבד`;
 
     const response = await aiGateway.generateResponse({
-      messages: [
-        {
-          role: 'user',
-          content: hintPrompt,
-        },
-      ],
-      systemPrompt: TUTOR_SYSTEM_PROMPT,
-      maxTokens: 200,
+      messages: [{ role: 'user', content: hintPrompt }],
+      systemPrompt: getSubjectConfig('physics').systemPrompt,
+      maxTokens: 300,
       temperature: 0.6,
     });
 
     return response.content;
   }
 
-  /**
-   * Generate full solution (after hints)
-   */
-  static async generateFullSolution(
-    question: string,
-    ragContext: KnowledgeChunk[]
+  // ── Private helpers ─────────────────────────────────────────────────────────
+
+  private static async getOrCreateConversation(
+    userId: string,
+    questionText: string,
+    subjectId: string,
+    existingConvId?: string
   ): Promise<string> {
-    await aiGateway.initializeForUser('');
+    if (existingConvId) {
+      // Verify it belongs to this user
+      const existing = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.id, existingConvId))
+        .limit(1);
+      if (existing.length > 0) return existingConvId;
+    }
 
-    const solutionPrompt = `
-שאלה: ${question}
+    // Create new conversation with title derived from first question
+    const title = questionText.length > 80 ? questionText.substring(0, 77) + '...' : questionText;
+    const [conv] = await db
+      .insert(conversations)
+      .values({ userId, title, subject: subjectId })
+      .returning({ id: conversations.id });
 
-חומר הלימוד:
-${this.buildContextFromChunks(ragContext)}
+    return conv.id;
+  }
 
-תן פתרון מלא ומפורט:
-1. הסבר כל שלב
-2. הראה את הנוסחה
-3. חשב את התשובה
-4. תן בדיקת שכל (האם התשובה הגיונית?)
+  private static async loadHistory(conversationId: string): Promise<AIMessage[]> {
+    const messages = await db
+      .select({ role: conversationMessages.role, content: conversationMessages.content })
+      .from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(asc(conversationMessages.createdAt))
+      .limit(MAX_HISTORY_MESSAGES);
 
-צטט את המקורות שלך.`;
+    return messages.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+  }
 
-    const response = await aiGateway.generateResponse({
-      messages: [
-        {
-          role: 'user',
-          content: solutionPrompt,
-        },
-      ],
-      systemPrompt: TUTOR_SYSTEM_PROMPT,
-      maxTokens: 2048,
-      temperature: 0.5,
-    });
+  private static buildUserPrompt(questionText: string, contextText: string): string {
+    return `שאלה: ${questionText}
 
-    return response.content;
+${contextText ? `חומר לימוד רלוונטי:\n${contextText}` : ''}
+
+ענה בפורמט JSON המדויק שפורט בהנחיות המערכת. ללא מלל מחוץ לאובייקט ה-JSON.`;
+  }
+
+  private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
+    if (chunks.length === 0) return '';
+    return chunks
+      .map((chunk, idx) => `[מקור ${idx + 1}: ${chunk.source}]\n${chunk.text}`)
+      .join('\n\n---\n\n');
   }
 
   /**
-   * Build context string from knowledge chunks
+   * Parse the AI response as structured JSON.
+   * Falls back to a minimal valid structure if parsing fails.
    */
-  private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
-    return chunks
-      .map(
-        (chunk, idx) =>
-          `[מקור ${idx + 1}: ${chunk.source}]\n${chunk.text}\n`
-      )
-      .join('\n---\n\n');
+  private static parseStructuredResponse(rawText: string): TutorStructuredResponse {
+    // Strip markdown code blocks if present
+    const cleaned = rawText
+      .replace(/^```json\s*/m, '')
+      .replace(/^```\s*/m, '')
+      .replace(/```\s*$/m, '')
+      .trim();
+
+    try {
+      const parsed = JSON.parse(cleaned);
+      return TutorStructuredResponseSchema.parse(parsed);
+    } catch {
+      // Fallback: wrap the raw text in a valid structure
+      return {
+        explanation: rawText,
+        steps: [{ number: 1, title: 'הסבר', content: rawText }],
+        hints: ['קרא שוב את השאלה בעיון', 'חשוב על מה נדרש', 'נסה לפרק לחלקים קטנים'],
+        misconceptions: [],
+        socraticQuestion: undefined,
+      };
+    }
   }
 }

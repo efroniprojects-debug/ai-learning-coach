@@ -1,17 +1,7 @@
 import { KnowledgeService } from './knowledge.service';
 import { TutorService } from './tutor.service';
+import type { TutorFullResponse } from './tutor.service';
 import type { KnowledgeChunk } from '@/ai/types';
-
-export interface Question {
-  id: string;
-  userId: string;
-  text: string;
-  imageUrls?: string[];
-  topicHint?: string;
-  concepts?: string[];
-  difficulty?: number;
-  createdAt: Date;
-}
 
 export interface QuestionAnalysis {
   concepts: string[];
@@ -21,30 +11,19 @@ export interface QuestionAnalysis {
 
 export class QuestionService {
   /**
-   * Analyze a question to extract concepts and difficulty
+   * Analyze a question using simple heuristics.
+   * TODO (S07): replace with AI-powered concept extraction.
    */
-  static async analyzeQuestion(questionText: string): Promise<QuestionAnalysis> {
-    // TODO: In production, use AI to extract concepts
-    // For now, use simple heuristics
-
-    const keywords = questionText.toLowerCase().split(' ');
+  static analyzeQuestion(questionText: string): QuestionAnalysis {
+    const lower = questionText.toLowerCase();
     const concepts: string[] = [];
-    let difficulty = 1;
 
-    // Simple keyword matching (mock)
-    if (keywords.some((k) => k.includes('כוח'))) {
-      concepts.push('כוח');
-    }
-    if (keywords.some((k) => k.includes('תאוצה'))) {
-      concepts.push('תאוצה');
-    }
-    if (keywords.some((k) => k.includes('מהירות'))) {
-      concepts.push('מהירות');
-    }
+    if (lower.includes('כוח')) concepts.push('כוח');
+    if (lower.includes('תאוצה')) concepts.push('תאוצה');
+    if (lower.includes('מהירות')) concepts.push('מהירות');
+    if (lower.includes('אנרגיה')) concepts.push('אנרגיה');
 
-    // Difficulty heuristic
-    if (questionText.length > 100) difficulty = 2;
-    if (keywords.length > 15) difficulty = 3;
+    const difficulty = questionText.length > 150 ? 3 : questionText.length > 80 ? 2 : 1;
 
     return {
       concepts,
@@ -54,57 +33,34 @@ export class QuestionService {
   }
 
   /**
-   * Process question: analyze → search → answer
+   * Full question processing: RAG search → structured tutor response.
    */
   static async processQuestion(
     userId: string,
     questionText: string,
-    imageUrls?: string[]
-  ): Promise<{
-    analysis: QuestionAnalysis;
-    ragContext: KnowledgeChunk[];
-    tutorResponse: Awaited<ReturnType<typeof TutorService.answerQuestion>>;
-  }> {
-    // Step 1: Analyze question
-    const analysis = await this.analyzeQuestion(questionText);
-
-    // Step 2: Search for relevant knowledge chunks
+    imageUrls?: string[],
+    conversationId?: string
+  ): Promise<{ analysis: QuestionAnalysis; ragContext: KnowledgeChunk[]; tutorResponse: TutorFullResponse }> {
+    const analysis = this.analyzeQuestion(questionText);
     const ragContext = await KnowledgeService.searchChunks(questionText, 5);
 
-    // Step 3: Get tutoring response
     const tutorResponse = await TutorService.answerQuestion(
-      {
-        text: questionText,
-        imageUrls,
-        userId,
-        topicHint: analysis.topicHint,
-      },
+      { text: questionText, imageUrls, userId, subjectId: 'physics', conversationId },
       ragContext
     );
 
-    return {
-      analysis,
-      ragContext,
-      tutorResponse,
-    };
+    return { analysis, ragContext, tutorResponse };
   }
 
   /**
-   * Get hint for a question
+   * Generate a progressive hint.
    */
   static async getHint(
     questionText: string,
-    previousExplanation: string
+    previousExplanation: string,
+    userId: string = ''
   ): Promise<string> {
     const ragContext = await KnowledgeService.searchChunks(questionText, 3);
-    return TutorService.generateHint(questionText, previousExplanation, ragContext);
-  }
-
-  /**
-   * Get full solution for a question
-   */
-  static async getSolution(questionText: string): Promise<string> {
-    const ragContext = await KnowledgeService.searchChunks(questionText, 5);
-    return TutorService.generateFullSolution(questionText, ragContext);
+    return TutorService.generateHint(questionText, previousExplanation, ragContext, userId);
   }
 }
