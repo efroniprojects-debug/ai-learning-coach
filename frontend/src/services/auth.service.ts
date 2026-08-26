@@ -48,6 +48,15 @@ class AuthService {
   }
 
   /**
+   * Demo login (no Google OAuth required)
+   */
+  async demoLogin(email?: string): Promise<LoginResponse> {
+    const { data } = await this.api.post<LoginResponse>('/api/v1/auth/demo-login', { email });
+    this.setTokens(data.tokens);
+    return data;
+  }
+
+  /**
    * Initiate Google OAuth login
    */
   initiateGoogleLogin(): void {

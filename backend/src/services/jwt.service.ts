@@ -1,12 +1,18 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
-if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
-  throw new Error('JWT_SECRET and JWT_REFRESH_SECRET environment variables are required');
+function getSecret(): string {
+  const s = process.env.JWT_SECRET;
+  if (!s) throw new Error('JWT_SECRET environment variable is required');
+  return s;
+}
+
+function getRefreshSecret(): string {
+  const s = process.env.JWT_REFRESH_SECRET;
+  if (!s) throw new Error('JWT_REFRESH_SECRET environment variable is required');
+  return s;
 }
 
 export interface JWTPayload {
@@ -16,29 +22,25 @@ export interface JWTPayload {
 
 export class JWTService {
   static generateAccessToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_SECRET as any, {
-      expiresIn: JWT_EXPIRES_IN,
-    } as any);
+    return jwt.sign(payload, getSecret(), { expiresIn: JWT_EXPIRES_IN } as any);
   }
 
   static generateRefreshToken(payload: JWTPayload): string {
-    return jwt.sign(payload, JWT_REFRESH_SECRET as any, {
-      expiresIn: JWT_REFRESH_EXPIRES_IN,
-    } as any);
+    return jwt.sign(payload, getRefreshSecret(), { expiresIn: JWT_REFRESH_EXPIRES_IN } as any);
   }
 
   static verifyAccessToken(token: string): JWTPayload {
     try {
-      return jwt.verify(token, JWT_SECRET as any) as JWTPayload;
-    } catch (error) {
+      return jwt.verify(token, getSecret()) as JWTPayload;
+    } catch {
       throw new Error('Invalid or expired access token');
     }
   }
 
   static verifyRefreshToken(token: string): JWTPayload {
     try {
-      return jwt.verify(token, JWT_REFRESH_SECRET as any) as JWTPayload;
-    } catch (error) {
+      return jwt.verify(token, getRefreshSecret()) as JWTPayload;
+    } catch {
       throw new Error('Invalid or expired refresh token');
     }
   }

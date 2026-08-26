@@ -1,19 +1,19 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 const ENCRYPTION_ALGORITHM = process.env.ENCRYPTION_ALGORITHM || 'aes-256-gcm';
 
-if (!ENCRYPTION_KEY) {
-  throw new Error('ENCRYPTION_KEY environment variable is required');
+function getKey(): Buffer {
+  const k = process.env.ENCRYPTION_KEY;
+  if (!k) throw new Error('ENCRYPTION_KEY environment variable is required');
+  return Buffer.from(k, 'base64') as any;
 }
 
 export class EncryptionService {
-  private static readonly key = Buffer.from(ENCRYPTION_KEY, 'base64') as any;
   private static readonly algorithm = ENCRYPTION_ALGORITHM;
 
   static encrypt(plaintext: string): string {
     const iv = crypto.randomBytes(16) as any;
-    const cipherObj = crypto.createCipheriv(this.algorithm as any, this.key, iv);
+    const cipherObj = crypto.createCipheriv(this.algorithm as any, getKey() as any, iv);
 
     let encrypted = cipherObj.update(plaintext, 'utf8', 'hex');
     encrypted += cipherObj.final('hex');
@@ -35,7 +35,7 @@ export class EncryptionService {
       const iv = Buffer.from(ivHex, 'hex') as any;
       const authTag = Buffer.from(authTagHex, 'hex');
 
-      const decipherObj = crypto.createDecipheriv(this.algorithm as any, this.key, iv);
+      const decipherObj = crypto.createDecipheriv(this.algorithm as any, getKey() as any, iv);
       (decipherObj as any).setAuthTag(authTag);
 
       let decrypted = decipherObj.update(encryptedHex, 'hex', 'utf8');

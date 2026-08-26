@@ -4,12 +4,14 @@ import { JWTService } from './jwt.service';
 import axios from 'axios';
 import crypto from 'crypto';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL;
-
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_CALLBACK_URL) {
-  throw new Error('Google OAuth environment variables are not set');
+function getGoogleCreds() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
+  if (!clientId || !clientSecret || !callbackUrl) {
+    throw new Error('Google OAuth environment variables are not set');
+  }
+  return { clientId, clientSecret, callbackUrl };
 }
 
 interface GoogleTokenResponse {
@@ -32,13 +34,14 @@ export class AuthService {
    * Exchange authorization code for tokens
    */
   static async exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse> {
+    const { clientId, clientSecret, callbackUrl } = getGoogleCreds();
     const response = await axios.post<GoogleTokenResponse>(
       'https://oauth2.googleapis.com/token',
       {
         code,
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri: GOOGLE_CALLBACK_URL,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: callbackUrl,
         grant_type: 'authorization_code',
       }
     );
