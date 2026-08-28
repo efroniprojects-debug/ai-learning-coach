@@ -31,15 +31,22 @@ class AuthService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
-          try {
-            const { data } = await this.api.post<AuthTokens>('/api/v1/auth/refresh');
-            localStorage.setItem('accessToken', data.accessToken);
-            originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-            return this.api(originalRequest);
-          } catch {
-            this.logout();
-            window.location.href = '/login';
+          const storedRefreshToken = localStorage.getItem('refreshToken');
+          if (storedRefreshToken) {
+            try {
+              const { data } = await this.api.post<AuthTokens>('/api/v1/auth/refresh', {
+                refreshToken: storedRefreshToken,
+              });
+              this.setTokens(data);
+              originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+              return this.api(originalRequest);
+            } catch {
+              // refresh failed → force logout
+            }
           }
+
+          this.clearLocalTokens();
+          window.location.href = '/login';
         }
 
         return Promise.reject(error);
@@ -105,9 +112,19 @@ class AuthService {
   }
 
   /**
-   * Logout user
+   * Logout user — calls backend to delete session, then clears local tokens
    */
-  logout(): void {
+  async logout(): Promise<void> {
+    try {
+      await this.api.post('/api/v1/auth/logout');
+    } catch {
+      // ignore: session may already be expired
+    } finally {
+      this.clearLocalTokens();
+    }
+  }
+
+  private clearLocalTokens(): void {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');

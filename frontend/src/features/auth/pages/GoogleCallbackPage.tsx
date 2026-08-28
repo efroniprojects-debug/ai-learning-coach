@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/services/auth.store';
 
@@ -6,8 +6,13 @@ export function GoogleCallbackPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { handleGoogleCallback, error } = useAuthStore();
+  // Guard against React 18 StrictMode double-invocation and component remounts
+  const processed = useRef(false);
 
   useEffect(() => {
+    if (processed.current) return;
+    processed.current = true;
+
     const code = searchParams.get('code');
     const errorParam = searchParams.get('error');
 

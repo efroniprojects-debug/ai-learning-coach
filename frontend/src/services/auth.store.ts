@@ -11,7 +11,7 @@ interface AuthState {
   login: () => Promise<void>;
   demoLogin: (email?: string) => Promise<void>;
   handleGoogleCallback: (code: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   clearError: () => void;
 }
@@ -65,8 +65,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    authService.logout();
+  logout: async () => {
+    await authService.logout();
     set({ user: null, isAuthenticated: false, error: null });
   },
 

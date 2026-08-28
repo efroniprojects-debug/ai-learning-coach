@@ -156,41 +156,40 @@ export class AuthService {
   }
 
   /**
-   * Refresh access token
+   * Refresh access token — userId extracted from the refresh token itself
    */
-  static async refreshAccessToken(refreshToken: string, userId: string) {
-    // Verify refresh token
+  static async refreshAccessToken(refreshToken: string) {
+    // Verify refresh token signature and extract userId
     const payload = JWTService.verifyRefreshToken(refreshToken);
 
-    if (payload.userId !== userId) {
-      throw new Error('Invalid refresh token');
-    }
-
-    // Check if session exists (optional, for extra security)
+    // Verify session exists in DB
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-
     const [session] = await db.select().from(sessions).where(eq(sessions.refreshTokenHash, refreshTokenHash)).limit(1);
 
     if (!session) {
       throw new Error('Session not found');
     }
 
-    // Generate new access token
-    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const [user] = await db.select().from(users).where(eq(users.id, payload.userId)).limit(1);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    const newAccessToken = JWTService.generateAccessToken({
-      userId: user.id,
-      email: user.email,
-    });
+    // Rotate refresh token: invalidate old session, issue new one
+    await db.delete(sessions).where(eq(sessions.refreshTokenHash, refreshTokenHash));
+
+    const newAccessToken = JWTService.generateAccessToken({ userId: user.id, email: user.email });
+    const newRefreshToken = JWTService.generateRefreshToken({ userId: user.id, email: user.email });
+    const newHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db.insert(sessions).values({ userId: user.id, refreshTokenHash: newHash, expiresAt });
 
     return {
       accessToken: newAccessToken,
-      refreshToken, // Return same refresh token (can implement rotation if needed)
-      expiresIn: 900, // 15 minutes
+      refreshToken: newRefreshToken,
+      expiresIn: 900,
     };
   }
 

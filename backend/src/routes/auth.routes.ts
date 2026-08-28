@@ -38,20 +38,9 @@ export async function authRoutes(app: FastifyInstance) {
     '/api/v1/auth/refresh',
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const authHeader = request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return reply.status(401).send({ error: 'Missing authorization header' });
-        }
-
-        const accessToken = authHeader.substring(7);
-
         const body = refreshTokenSchema.parse(request.body);
-        const result = await AuthService.refreshAccessToken(
-          body.refreshToken,
-          // Extract userId from old access token (before it expired)
-          // For now, we'll rely on the client sending it
-          request.headers['x-user-id'] as string
-        );
+        // userId is extracted from the refresh token itself — no x-user-id header needed
+        const result = await AuthService.refreshAccessToken(body.refreshToken);
 
         reply.status(200).send(result);
       } catch (error) {
