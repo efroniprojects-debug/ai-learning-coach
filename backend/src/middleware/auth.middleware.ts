@@ -5,7 +5,10 @@ import type { FastifyRequest } from 'fastify';
 export async function authMiddleware(
   request: FastifyRequest
 ) {
-  request.user = { userId: 'local-user-00000000', email: 'user@physiq.local' };
+  request.user = {
+    userId: '00000000-0000-4000-8000-000000000001',
+    email: 'physiq-local-user@local.invalid',
+  };
 }
 
 // Extend Fastify request type

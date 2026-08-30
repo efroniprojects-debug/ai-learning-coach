@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { UploadForm } from '../components/UploadForm';
 import { UploadList } from '../components/UploadList';
+import { DriveFilesPanel } from '../components/DriveFilesPanel';
 import type { Upload } from '../types';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 export function UploadPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'upload' | 'drive'>('upload');
 
   const handleFileUpload = async (file: File) => {
     setLoading(true);
@@ -17,7 +21,7 @@ export function UploadPage() {
       // For now, mock upload
       const mockUrl = `gs://ai-learning-coach-storage/${file.name}`;
 
-      const response = await fetch('/api/v1/uploads/file', {
+      const response = await fetch(`${API_BASE}/api/v1/uploads/file`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,7 +51,7 @@ export function UploadPage() {
 
   const handleProcessUpload = async (uploadId: string) => {
     try {
-      const response = await fetch(`/api/v1/uploads/process/${uploadId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/uploads/process/${uploadId}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -59,7 +63,7 @@ export function UploadPage() {
       }
 
       // Refresh uploads list
-      const listResponse = await fetch('/api/v1/uploads', {
+      const listResponse = await fetch(`${API_BASE}/api/v1/uploads`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
@@ -74,7 +78,7 @@ export function UploadPage() {
 
   const handleDeleteUpload = async (uploadId: string) => {
     try {
-      const response = await fetch(`/api/v1/uploads/${uploadId}`, {
+      const response = await fetch(`${API_BASE}/api/v1/uploads/${uploadId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -92,7 +96,7 @@ export function UploadPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="max-w-4xl mx-auto py-8 px-4" dir="rtl">
       <h1 className="text-3xl font-bold mb-2">העלה חומרי לימוד</h1>
       <p className="text-gray-600 mb-8">
         העלה קבצי PDF, תמונות או טקסט. המערכת תחלץ את הטקסט, תפרק לקטעים, וגנרט embeddings לחיפוש סמנטי.
@@ -104,7 +108,12 @@ export function UploadPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="mb-6 flex gap-2 border-b" role="tablist" aria-label="מקור חומרי הלימוד">
+        <button onClick={() => setActiveTab('upload')} className={`px-4 py-3 text-sm font-medium ${activeTab === 'upload' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>העלה קובץ</button>
+        <button onClick={() => setActiveTab('drive')} className={`px-4 py-3 text-sm font-medium ${activeTab === 'drive' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>📁 חומרי לימוד מ־Drive</button>
+      </div>
+
+      {activeTab === 'drive' ? <DriveFilesPanel /> : <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
           <h2 className="text-xl font-semibold mb-4">הוסף קובץ</h2>
           <UploadForm onUpload={handleFileUpload} disabled={loading} />
@@ -118,7 +127,7 @@ export function UploadPage() {
             onDelete={handleDeleteUpload}
           />
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

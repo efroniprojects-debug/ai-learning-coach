@@ -6,6 +6,7 @@ import { ModeSelector } from '../components/ModeSelector';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
+import { ConversationHistory } from '../components/ConversationHistory';
 import type { TutorResponse } from '../types';
 
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
@@ -111,6 +112,14 @@ export function QuestionWorkspacePage() {
     setConversationId(null); setResponse(null); setStreamText(''); setError(null); setIsFollowUp(false);
   };
 
+  const handleConversationSelect = (savedResponse: TutorResponse) => {
+    setResponse(savedResponse);
+    setConversationId(savedResponse.conversationId);
+    setStreamText('');
+    setError(null);
+    setIsFollowUp(true);
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-6 px-4" dir="rtl">
       {/* Header */}
@@ -132,6 +141,11 @@ export function QuestionWorkspacePage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* ── Sidebar: Topic + PhET ── */}
         <div className="lg:col-span-1 space-y-4">
+          <ConversationHistory
+            activeConversationId={conversationId}
+            onSelect={handleConversationSelect}
+            onNew={handleNewConversation}
+          />
           <div className="border border-gray-200 rounded-xl overflow-hidden">
             <button
               onClick={() => setShowTopics(!showTopics)}

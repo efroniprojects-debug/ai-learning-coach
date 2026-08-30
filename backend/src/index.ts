@@ -38,6 +38,11 @@ async function startServer() {
       db.select({ id: users.id }).from(users).limit(1),
       new Promise((_, reject) => setTimeout(() => reject(new Error('DB connection timeout')), 5000)),
     ]);
+    await db.insert(users).values({
+      id: '00000000-0000-4000-8000-000000000001',
+      email: 'physiq-local-user@local.invalid',
+      displayName: 'PhysIQ Student',
+    }).onConflictDoNothing();
     dbAvailable = true;
   } catch (e) {
     app.log.warn('Database not available: ' + (e instanceof Error ? e.message : String(e)));
@@ -129,7 +134,7 @@ async function startServer() {
     });
     app.get('/api/v1/auth/verify', async (_req, reply) => {
       // Auth removed — always return local user
-      return reply.status(200).send({ id: 'local-user-00000000', email: 'user@physiq.local', displayName: 'Sharon' });
+      return reply.status(200).send({ id: '00000000-0000-4000-8000-000000000001', email: 'physiq-local-user@local.invalid', displayName: 'PhysIQ Student' });
     });
     app.post('/api/v1/auth/logout', async (_req, reply) => {
       reply.status(200).send({ success: true });
@@ -175,6 +180,23 @@ async function startServer() {
       mastery: { totalConcepts: 0, distribution: { novice: 0, intermediate: 0, proficient: 0, expert: 0 }, averageElo: 0 },
     })
   );
+
+  // ─── Uploads + Google Drive ─────────────────────────────────────────────
+  if (dbAvailable) {
+    const { uploadRoutes } = await import('./routes/upload.routes');
+    await app.register(uploadRoutes);
+  }
+  const { driveRoutes } = await import('./routes/drive.routes');
+  await app.register(driveRoutes);
+
+  if (dbAvailable && process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_DRIVE_FOLDER_ID) {
+    const { DriveService } = await import('./services/drive.service');
+    void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Initial Drive sync failed'));
+    const driveSyncTimer = setInterval(() => {
+      void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Scheduled Drive sync failed'));
+    }, 30 * 60 * 1000);
+    driveSyncTimer.unref();
+  }
 
 
   // ─── Question Routes (stream endpoint + RAG) ────────────────────────────

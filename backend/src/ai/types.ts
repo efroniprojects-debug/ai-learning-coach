@@ -40,12 +40,13 @@ export interface KnowledgeChunk {
   text: string;
   embedding?: number[];
   source: string;
-  sourceType: 'exam' | 'textbook' | 'notebook' | 'custom';
+  sourceType: 'exam' | 'textbook' | 'notebook' | 'custom' | 'google_drive';
   metadata: {
     page?: number;
     section?: string;
     topic?: string;
     concept?: string;
+    sourceName?: string;
   };
 }
 

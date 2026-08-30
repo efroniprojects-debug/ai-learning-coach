@@ -1,5 +1,5 @@
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+import { db, knowledgeChunks } from '@/db';
+import { desc, ilike, or, sql } from 'drizzle-orm';
 import type { KnowledgeChunk } from '@/ai/types';
 
 // Mock knowledge chunks (in production, these would be in vector DB)
@@ -62,13 +62,45 @@ export class KnowledgeService {
    * In production, this would query pgvector DB
    */
   static async searchChunks(query: string, topK: number = 5): Promise<KnowledgeChunk[]> {
-    // TODO: In production:
-    // 1. Generate embedding for query
-    // 2. Search pgvector table with cosine similarity
-    // 3. Return top-K results with relevance scores
+    const limit = Math.min(Math.max(topK, 1), 3);
+    const keywords = query.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+    const physicsKeywords = keywords.filter((word) =>
+      /כוח|מסה|משקל|תאוצ|מהירות|תנועה|אנרג|תנע|חשמל|מתח|זרם|גל|אור|חום|כבידה/.test(word)
+    );
+    const searchTerms = [...new Set([...physicsKeywords, ...keywords])].slice(0, 8);
 
-    // For now, return mock chunks (simulating search)
-    const keywords = query.toLowerCase().split(' ');
+    if (searchTerms.length > 0) {
+      try {
+        const conditions = searchTerms.flatMap((term) => {
+          const pattern = `%${term}%`;
+          return [
+            ilike(knowledgeChunks.chunkText, pattern),
+            sql<boolean>`coalesce(${knowledgeChunks.metadata}->>'sourceName', '') ilike ${pattern}`,
+          ];
+        });
+        const rows = await db
+          .select()
+          .from(knowledgeChunks)
+          .where(or(...conditions))
+          .orderBy(desc(knowledgeChunks.createdAt))
+          .limit(limit);
+
+        if (rows.length > 0) {
+          return rows.map((row) => {
+            const metadata = (row.metadata ?? {}) as KnowledgeChunk['metadata'];
+            return {
+              id: row.id,
+              text: row.chunkText,
+              source: metadata.sourceName ?? row.sourceType,
+              sourceType: row.sourceType as KnowledgeChunk['sourceType'],
+              metadata,
+            };
+          });
+        }
+      } catch {
+        // DB/RAG is optional; the built-in physics references remain available.
+      }
+    }
 
     const scored = MOCK_CHUNKS.map((chunk) => {
       let score = 0;
@@ -83,7 +115,7 @@ export class KnowledgeService {
     // Return top-K by score
     return scored
       .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
+      .slice(0, limit)
       .map((item) => item.chunk);
   }
 

@@ -322,7 +322,10 @@ export class TutorService {
     questionText: string, contextText: string, topic?: string, subtopic?: string
   ): string {
     const topicLine = topic ? `\nנושא: ${topic}${subtopic ? ` → ${subtopic}` : ''}` : '';
-    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}` : ''}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
+    const citationInstruction = contextText
+      ? '\nהסתמך על החומר הרלוונטי, וציין בתוך ההסבר הפניות בפורמט [מקור 1], [מקור 2] לפי הצורך.'
+      : '';
+    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}` : ''}${citationInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
   }
 
   private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
