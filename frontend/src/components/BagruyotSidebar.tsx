@@ -136,8 +136,7 @@ export function BagruyotSidebar() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="fixed top-1/2 -translate-y-1/2 right-0 bg-indigo-600 text-white text-xs font-bold py-6 px-2 rounded-l-lg shadow-lg hover:bg-indigo-700 transition-colors touch-manipulation"
-        style={{ zIndex: 7000 }}
-        style={{ writingMode: 'vertical-rl', letterSpacing: '0.1em' }}
+        style={{ zIndex: 7000, writingMode: 'vertical-rl', letterSpacing: '0.1em' }}
         aria-label={open ? 'סגור סרגל בגרויות' : 'פתח סרגל בגרויות'}
       >
         {open ? '◀ סגור' : '▶ בגרויות'}

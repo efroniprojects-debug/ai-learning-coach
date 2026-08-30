@@ -171,13 +171,15 @@ async function startServer() {
   );
 
 
-  // ─── Question Routes (stream + RAG) — requires DB ───────────────────────
+  // ─── Question Routes (stream endpoint + RAG) ────────────────────────────
   if (dbAvailable) {
-    const { questionRoutes } = await import('./routes/question.routes');
-    await app.register(questionRoutes);
-    app.log.info('Question routes registered (stream + RAG)');
-  } else {
-    app.log.warn('Question routes NOT registered — DB unavailable');
+    try {
+      const { questionRoutes } = await import('./routes/question.routes');
+      await app.register(questionRoutes);
+      app.log.info('Question routes registered (/stream + /ask with RAG)');
+    } catch (e) {
+      app.log.warn('Question routes failed to register: ' + (e instanceof Error ? e.message : String(e)));
+    }
   }
 
   // ─── Physics Topics & PhET Simulations ───────────────────────────────────
