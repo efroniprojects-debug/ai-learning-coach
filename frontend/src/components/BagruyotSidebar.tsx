@@ -135,7 +135,8 @@ export function BagruyotSidebar() {
       {/* Toggle button — fixed to right edge */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed top-1/2 -translate-y-1/2 right-0 z-50 bg-indigo-600 text-white text-xs font-bold py-6 px-2 rounded-l-lg shadow-lg hover:bg-indigo-700 transition-colors writing-mode-vertical"
+        className="fixed top-1/2 -translate-y-1/2 right-0 bg-indigo-600 text-white text-xs font-bold py-6 px-2 rounded-l-lg shadow-lg hover:bg-indigo-700 transition-colors touch-manipulation"
+        style={{ zIndex: 7000 }}
         style={{ writingMode: 'vertical-rl', letterSpacing: '0.1em' }}
         aria-label={open ? 'סגור סרגל בגרויות' : 'פתח סרגל בגרויות'}
       >
@@ -206,27 +207,27 @@ export function BagruyotSidebar() {
 
                   {/* Year list */}
                   {isOpen && (
-                    <div className="bg-gray-50 pb-1">
+                    <div className="bg-white border-t border-gray-100 pb-1">
                       {yearKeys.map((year) => {
                         const seasons = years[year];
                         const isYearOpen = expandedYear === `${subject}-${year}`;
 
                         return (
-                          <div key={year}>
+                          <div key={year} className="border-b border-gray-50 last:border-b-0">
                             <button
                               onClick={() => toggleYear(`${subject}-${year}`)}
-                              className={`w-full text-right px-6 py-2 flex items-center justify-between text-xs transition-colors ${
+                              className={`w-full text-right px-6 py-2.5 flex items-center justify-between text-xs transition-colors ${
                                 isYearOpen
-                                  ? 'text-indigo-700 font-semibold'
-                                  : 'text-gray-600 hover:text-gray-900'
+                                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                                  : 'bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                               }`}
                             >
-                              <span>{year === 'כללי' ? '📁 כללי' : `📅 ${year}`}</span>
-                              <span className="text-gray-400">{isYearOpen ? '▲' : '▼'}</span>
+                              <span className="font-medium">{year === 'כללי' ? '📁 כללי' : `📅 ${year}`}</span>
+                              <span className={isYearOpen ? 'text-indigo-400' : 'text-gray-400'}>{isYearOpen ? '▲' : '▼'}</span>
                             </button>
 
                             {isYearOpen && (
-                              <div className="px-8 pb-2 flex flex-wrap gap-1">
+                              <div className="px-8 py-2 bg-indigo-50 flex flex-wrap gap-1.5">
                                 {seasons.map((s) => seasonBadge(s))}
                               </div>
                             )}

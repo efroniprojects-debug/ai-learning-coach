@@ -171,6 +171,15 @@ async function startServer() {
   );
 
 
+  // ─── Question Routes (stream + RAG) — requires DB ───────────────────────
+  if (dbAvailable) {
+    const { questionRoutes } = await import('./routes/question.routes');
+    await app.register(questionRoutes);
+    app.log.info('Question routes registered (stream + RAG)');
+  } else {
+    app.log.warn('Question routes NOT registered — DB unavailable');
+  }
+
   // ─── Physics Topics & PhET Simulations ───────────────────────────────────
   app.get('/api/v1/physics/topics', async (_req, reply) => {
     const { PHYSICS_TOPIC_TAXONOMY } = await import('@/config/subjects');

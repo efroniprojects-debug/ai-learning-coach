@@ -5,16 +5,10 @@ import { ResponseDisplay } from '../components/ResponseDisplay';
 import { ModeSelector } from '../components/ModeSelector';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
+import { ImageUpload } from '../components/ImageUpload';
 import type { TutorResponse } from '../types';
 
-type Provider = 'claude' | 'gemini' | 'openai';
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
-
-const PROVIDERS: { id: Provider; label: string; desc: string }[] = [
-  { id: 'claude', label: 'Claude', desc: 'Anthropic' },
-  { id: 'gemini', label: 'Gemini', desc: 'Google' },
-  { id: 'openai', label: 'GPT-4o', desc: 'OpenAI' },
-];
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
@@ -24,7 +18,7 @@ export function QuestionWorkspacePage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<Provider>('claude');
+  const [imageData, setImageData] = useState<string | null>(null);
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [mode, setMode] = useState<Mode>('step_by_step');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -59,6 +53,7 @@ export function QuestionWorkspacePage() {
           mode,
           topic: selectedTopic ?? undefined,
           subtopic: selectedSubtopic ?? undefined,
+          imageData: imageData ?? undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -93,6 +88,7 @@ export function QuestionWorkspacePage() {
             setResponse({ ...d.structured, conversationId: d.conversationId, messageId: d.messageId, sources: d.sources });
             setConversationId(d.conversationId);
             setIsStreaming(false);
+            setImageData(null);
           } else if (event.type === 'error') {
             throw new Error((event.message as string) || 'Stream error');
           }
@@ -162,20 +158,6 @@ export function QuestionWorkspacePage() {
             <ModeSelector mode={mode} onChange={setMode} disabled={isStreaming} />
           </div>
 
-          {/* Provider selector */}
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">ספק AI:</p>
-            <div className="flex gap-2 flex-wrap">
-              {PROVIDERS.map((p) => (
-                <label key={p.id} className={`flex items-center gap-1.5 cursor-pointer px-3 py-2 rounded-md border text-sm transition-colors ${provider === p.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400'}`}>
-                  <input type="radio" name="provider" value={p.id} checked={provider === p.id} onChange={() => setProvider(p.id)} disabled={isStreaming} className="sr-only" />
-                  <span className="font-medium">{p.label}</span>
-                  <span className={`text-xs ${provider === p.id ? 'text-blue-100' : 'text-gray-400'}`}>{p.desc}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           {/* Follow-up */}
           {conversationId && response && (
             <label className="flex items-center gap-3 cursor-pointer p-3 bg-blue-50 border border-blue-200 rounded-xl">
@@ -198,6 +180,14 @@ export function QuestionWorkspacePage() {
                 : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
             }
           />
+
+          {/* Image upload */}
+          <div className="px-1">
+            <ImageUpload onImage={setImageData} disabled={isStreaming} />
+            {imageData && (
+              <p className="text-xs text-blue-600 mt-1">📷 התמונה תישלח לניתוח עם השאלה</p>
+            )}
+          </div>
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">

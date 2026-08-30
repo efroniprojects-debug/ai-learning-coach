@@ -32,6 +32,7 @@ export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSche
 export interface TutorQuestion {
   text: string;
   imageUrls?: string[];
+  imageData?: string; // base64 image for Gemini Vision
   userId: string;
   subjectId?: string;
   conversationId?: string;
@@ -108,8 +109,6 @@ export class TutorService {
     const subjectId = question.subjectId ?? 'physics';
     const systemPrompt = buildSystemPrompt(question.mode);
 
-    await aiGateway.initializeForUser(question.userId);
-
     const convId = await this.getOrCreateConversation(
       question.userId, question.text, subjectId, question.conversationId
     );
@@ -124,18 +123,74 @@ export class TutorService {
       conversationId: convId, role: 'user', content: userMessageContent,
     });
 
-    const messages: AIMessage[] = [
-      ...history,
-      { role: 'user', content: userMessageContent },
+    // ── Gemini direct call (supports Vision when imageData present) ──────────
+    const apiKey = process.env.DEMO_GEMINI_API_KEY;
+    if (!apiKey) throw new Error('DEMO_GEMINI_API_KEY is not configured');
+
+    const modelName = 'gemini-1.5-flash';
+    const promptText = `${systemPrompt}\n\n${userMessageContent}`;
+
+    // Build history parts for multi-turn
+    const historyContents = history.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    // Build current user turn parts
+    type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
+    const currentParts: GeminiPart[] = question.imageData
+      ? [
+          { text: promptText },
+          { inline_data: { mime_type: 'image/jpeg', data: question.imageData } },
+        ]
+      : [{ text: promptText }];
+
+    const contents = [
+      ...historyContents,
+      { role: 'user', parts: currentParts },
     ];
 
+    const streamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+    const geminiRes = await fetch(streamUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents }),
+    });
+
+    if (!geminiRes.ok) {
+      const errData = (await geminiRes.json()) as { error?: { message?: string } };
+      throw new Error(errData.error?.message || `Gemini API error: ${geminiRes.status}`);
+    }
+
+    // Parse SSE stream from Gemini
+    const reader = geminiRes.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
     let fullText = '';
 
-    for await (const chunk of aiGateway.generateStream({
-      messages, systemPrompt, maxTokens: 2048, temperature: 0.7,
-    })) {
-      fullText += chunk.delta;
-      yield { type: 'delta', text: chunk.delta };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (!raw || raw === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(raw) as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const delta = parsed.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+          if (delta) {
+            fullText += delta;
+            yield { type: 'delta', text: delta };
+          }
+        } catch { /* skip malformed lines */ }
+      }
     }
 
     const structured = this.parseStructuredResponse(fullText);

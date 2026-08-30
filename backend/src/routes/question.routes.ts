@@ -20,6 +20,10 @@ const streamQuestionBodySchema = z.object({
   text: z.string().min(1, 'Question is required').max(2000),
   conversationId: z.string().uuid().optional(),
   subjectId: z.string().optional().default('physics'),
+  imageData: z.string().optional(), // base64 image for Gemini Vision
+  mode: z.enum(['step_by_step', 'full', 'diagnose', 'concept']).optional(),
+  topic: z.string().optional(),
+  subtopic: z.string().optional(),
 });
 
 type AskQuestionBody = z.infer<typeof askQuestionBodySchema>;
@@ -117,6 +121,10 @@ export async function questionRoutes(app: FastifyInstance) {
             userId: request.user.userId,
             subjectId: body.subjectId,
             conversationId: body.conversationId,
+            imageData: body.imageData,
+            mode: body.mode,
+            topic: body.topic,
+            subtopic: body.subtopic,
           },
           ragContext
         )) {
