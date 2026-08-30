@@ -150,12 +150,15 @@ export class TutorService {
       { role: 'user', parts: currentParts },
     ];
 
-    // Use generateContent (simpler, more reliable than SSE streaming)
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    // Use generateContent with X-goog-api-key header (supports AQ. format keys)
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
 
     const geminiRes = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': apiKey,
+      },
       body: JSON.stringify({ contents }),
     });
 
