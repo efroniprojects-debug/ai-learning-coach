@@ -20,7 +20,6 @@ const streamQuestionBodySchema = z.object({
   text: z.string().min(1, 'Question is required').max(2000),
   conversationId: z.string().uuid().optional(),
   subjectId: z.string().optional().default('physics'),
-  mode: z.enum(['step_by_step', 'full', 'diagnose', 'concept']).optional(),
 });
 
 type AskQuestionBody = z.infer<typeof askQuestionBodySchema>;
@@ -118,7 +117,6 @@ export async function questionRoutes(app: FastifyInstance) {
             userId: request.user.userId,
             subjectId: body.subjectId,
             conversationId: body.conversationId,
-            mode: body.mode,
           },
           ragContext
         )) {

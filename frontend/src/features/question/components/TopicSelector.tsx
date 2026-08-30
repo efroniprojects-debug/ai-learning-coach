@@ -1,101 +1,69 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
-
-interface TopicConfig {
+interface TopicData {
   icon: string;
   subtopics: string[];
 }
 
-interface PhetSim {
-  title: string;
-  url: string;
-  description: string;
-}
-
 interface Props {
-  selectedTopic: string | null;
   selectedSubtopic: string | null;
   onSelect: (topic: string, subtopic: string) => void;
-  onPhetSims: (sims: PhetSim[]) => void;
 }
 
-export function TopicSelector({ selectedTopic, selectedSubtopic, onSelect, onPhetSims }: Props) {
-  const [expandedTopic, setExpandedTopic] = useState<string | null>(selectedTopic);
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
-  const { data: taxonomy, isLoading } = useQuery<Record<string, TopicConfig>>({
+export function TopicSelector({ selectedSubtopic, onSelect }: Props) {
+  const [openTopic, setOpenTopic] = useState<string | null>(null);
+
+  const { data: taxonomy, isLoading, isError } = useQuery<Record<string, TopicData>>({
     queryKey: ['physics-topics'],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/api/v1/physics/topics`);
-      if (!res.ok) throw new Error('Failed to fetch topics');
-      return res.json();
+      if (!res.ok) throw new Error('Failed');
+      return res.json() as Promise<Record<string, TopicData>>;
     },
     staleTime: 5 * 60 * 1000,
   });
 
-  const handleSubtopicClick = async (topic: string, subtopic: string) => {
-    onSelect(topic, subtopic);
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/physics/phet?subtopic=${encodeURIComponent(subtopic)}`);
-      if (res.ok) {
-        const sims: PhetSim[] = await res.json();
-        onPhetSims(sims);
-      }
-    } catch {
-      onPhetSims([]);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="p-4 text-center text-gray-400 text-sm" dir="rtl">
-        טוען נושאים...
-      </div>
-    );
-  }
-
-  if (!taxonomy) return null;
+  if (isLoading) return <p className="text-sm text-gray-400 p-3 text-center">טוען נושאים...</p>;
+  if (isError || !taxonomy) return <p className="text-sm text-red-400 p-3 text-center">לא ניתן לטעון נושאים</p>;
 
   return (
-    <div className="space-y-1" dir="rtl">
-      {Object.entries(taxonomy).map(([topicName, config]) => {
-        const isExpanded = expandedTopic === topicName;
-        return (
-          <div key={topicName} className="border border-gray-200 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setExpandedTopic(isExpanded ? null : topicName)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <span>{config.icon}</span>
-                <span>{topicName}</span>
-              </span>
-              <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
-            </button>
-            {isExpanded && (
-              <div className="px-4 py-3 flex flex-wrap gap-2 bg-white">
-                {config.subtopics.map((sub) => {
-                  const isSelected = selectedTopic === topicName && selectedSubtopic === sub;
-                  return (
-                    <button
-                      key={sub}
-                      onClick={() => handleSubtopicClick(topicName, sub)}
-                      className={`px-3 py-1 rounded-full text-xs border transition-colors
-                        ${isSelected
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
-                        }`}
-                    >
-                      {sub}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div dir="rtl" className="space-y-1">
+      {Object.entries(taxonomy).map(([topic, data]) => (
+        <div key={topic} className="border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setOpenTopic(openTopic === topic ? null : topic)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-right"
+          >
+            <span className="flex items-center gap-2 font-medium text-gray-800 text-sm">
+              <span>{data.icon}</span>
+              <span>{topic}</span>
+            </span>
+            <span className="text-gray-400 text-xs">{openTopic === topic ? '▲' : '▼'}</span>
+          </button>
+
+          {openTopic === topic && (
+            <div className="px-3 py-2 bg-white flex flex-wrap gap-1.5">
+              {data.subtopics.map((sub) => (
+                <button
+                  key={sub}
+                  onClick={() => onSelect(topic, sub)}
+                  className={[
+                    'text-xs px-2.5 py-1.5 rounded-full border transition-all',
+                    selectedSubtopic === sub
+                      ? 'bg-blue-600 text-white border-blue-600 font-medium'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600',
+                  ].join(' ')}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

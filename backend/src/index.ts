@@ -7,14 +7,8 @@ const HOST = '0.0.0.0';
 async function startServer() {
   const app = Fastify({ logger: true });
 
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://ai-learning-coach-cyan.vercel.app',
-    'https://ai-learning-coach-production.up.railway.app',
-  ];
-
-  await app.register(cors, { origin: allowedOrigins, credentials: true });
+  // Open CORS — allow all origins for cross-device access (phone, tablet, desktop)
+  await app.register(cors, { origin: true, credentials: false });
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/', async () => ({
@@ -127,35 +121,15 @@ async function startServer() {
     app.post('/api/v1/auth/google/callback', async (_req, reply) => {
       reply.status(503).send({ error: 'Google OAuth not configured. Use /api/v1/auth/demo-login.' });
     });
-    app.get('/api/v1/auth/verify', async (request, reply) => {
-      const authHeader = request.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ') || !jwtAvailable) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-      try {
-        const { JWTService } = await import('@/services/jwt.service');
-        const payload = JWTService.verifyAccessToken(authHeader.substring(7));
-        return reply.status(200).send({ id: payload.userId, email: payload.email, displayName: 'User' });
-      } catch {
-        return reply.status(401).send({ error: 'Invalid or expired token' });
-      }
+    app.get('/api/v1/auth/verify', async (_req, reply) => {
+      // Auth removed — always return local user
+      return reply.status(200).send({ id: 'local-user-00000000', email: 'user@physiq.local', displayName: 'Sharon' });
     });
     app.post('/api/v1/auth/logout', async (_req, reply) => {
       reply.status(200).send({ success: true });
     });
-    app.post('/api/v1/auth/refresh', async (request, reply) => {
-      const authHeader = request.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ') || !jwtAvailable) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-      try {
-        const { JWTService } = await import('@/services/jwt.service');
-        const payload = JWTService.verifyAccessToken(authHeader.substring(7));
-        const newToken = JWTService.generateAccessToken({ userId: payload.userId, email: payload.email });
-        return reply.status(200).send({ accessToken: newToken, expiresIn: 900 });
-      } catch {
-        return reply.status(401).send({ error: 'Invalid token' });
-      }
+    app.post('/api/v1/auth/refresh', async (_req, reply) => {
+      return reply.status(200).send({ accessToken: 'no-auth', expiresIn: 99999 });
     });
   }
 
@@ -196,35 +170,22 @@ async function startServer() {
     })
   );
 
-  // ─── Question Routes (streaming, RAG, conversations) ─────────────────────
-  if (dbAvailable && jwtAvailable) {
-    const { questionRoutes } = await import('./routes/question.routes');
-    await app.register(questionRoutes);
-    app.log.info('Question routes registered (streaming + RAG enabled)');
-  }
 
-  // ─── Physics Topic & PhET routes (no auth required) ──────────────────────
-  {
-    const { PHYSICS_TOPIC_TAXONOMY, PHET_SIMULATIONS } = await import('@/config/subjects');
+  // ─── Physics Topics & PhET Simulations ───────────────────────────────────
+  app.get('/api/v1/physics/topics', async (_req, reply) => {
+    const { PHYSICS_TOPIC_TAXONOMY } = await import('@/config/subjects');
+    return reply.send(PHYSICS_TOPIC_TAXONOMY);
+  });
 
-    app.get('/api/v1/physics/topics', async (_req, reply) => {
-      return reply.send(PHYSICS_TOPIC_TAXONOMY);
-    });
+  app.get('/api/v1/physics/phet', async (request, reply) => {
+    const { subtopic } = (request.query as { subtopic?: string });
+    const { PHET_SIMULATIONS } = await import('@/config/subjects');
+    if (!subtopic) return reply.send(PHET_SIMULATIONS);
+    return reply.send(PHET_SIMULATIONS[subtopic] ?? []);
+  });
 
-    app.get<{ Querystring: { subtopic?: string } }>(
-      '/api/v1/physics/phet',
-      async (request, reply) => {
-        const subtopic = request.query.subtopic;
-        if (!subtopic) return reply.send([]);
-        const sims = PHET_SIMULATIONS[subtopic] ?? [];
-        return reply.send(sims);
-      }
-    );
-  }
-
-  // ─── Ask Question (Multi-provider, BYOK-aware fallback) ──────────────────
-  // Only register when questionRoutes is NOT loaded (DB unavailable)
-  if (!dbAvailable || !jwtAvailable) app.post('/api/v1/questions/ask', async (request, reply) => {
+  // ─── Ask Question (Multi-provider, BYOK-aware) ────────────────────────────
+  app.post('/api/v1/questions/ask', async (request, reply) => {
     const body = request.body as { question?: string; text?: string; provider?: string };
     const question = body.question || body.text; // accept both field names
 
@@ -238,30 +199,12 @@ async function startServer() {
       'Explain concepts clearly using the Socratic method. Start with intuition, then steps. ' +
       'Always respond in Hebrew. Cite sources when available.';
 
-    // Resolve API key: BYOK first, then demo key
+    // Resolve API key from environment — no auth required
     let apiKey: string | null = null;
 
-    const authHeader = request.headers.authorization;
-    if (authHeader?.startsWith('Bearer ') && dbAvailable && jwtAvailable && encryptionAvailable) {
-      try {
-        const { JWTService } = await import('@/services/jwt.service');
-        const payload = JWTService.verifyAccessToken(authHeader.substring(7));
-        const { AISettingsService } = await import('@/services/ai-settings.service');
-        const config = await AISettingsService.getActiveConfig(payload.userId);
-        if (config.provider === provider) {
-          apiKey = config.apiKey;
-          app.log.info(`Using BYOK key for ${provider}`);
-        }
-      } catch {
-        // No BYOK key for this provider, fall through to demo
-      }
-    }
-
-    if (!apiKey) {
-      const envKey = `DEMO_${provider.toUpperCase()}_API_KEY`;
-      apiKey = process.env[envKey] || null;
-      if (apiKey) app.log.info(`Using demo key for ${provider}`);
-    }
+    const envKey = `DEMO_${provider.toUpperCase()}_API_KEY`;
+    apiKey = process.env[envKey] || null;
+    if (apiKey) app.log.info(`Using env key for ${provider}`);
 
     if (!apiKey) {
       return reply.status(400).send({

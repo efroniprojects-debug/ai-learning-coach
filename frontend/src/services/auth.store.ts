@@ -1,76 +1,28 @@
+// Auth removed — open access
 import { create } from 'zustand';
-import type { User } from '@/types/auth';
-import { authService } from './auth.service';
 
 interface AuthState {
-  user: User | null;
-  isLoading: boolean;
-  error: string | null;
   isAuthenticated: boolean;
-
-  login: () => Promise<void>;
-  demoLogin: (email?: string) => Promise<void>;
-  handleGoogleCallback: (code: string) => Promise<void>;
-  logout: () => Promise<void>;
-  fetchUser: () => Promise<void>;
+  isLoading: boolean;
+  user: { id: string; email: string; displayName: string } | null;
+  login: () => void;
+  logout: () => void;
+  fetchUser: () => void;
+  demoLogin: () => void;
   clearError: () => void;
+  error: null;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
+export const useAuthStore = create<AuthState>(() => ({
+  isAuthenticated: true,
   isLoading: false,
   error: null,
-  isAuthenticated: false,
-
-  login: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      authService.initiateGoogleLogin();
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Login failed', isLoading: false });
-    }
-  },
-
-  demoLogin: async (email?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await authService.demoLogin(email);
-      set({ user: response.user, isAuthenticated: true, isLoading: false });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Demo login failed', isLoading: false });
-      throw error;
-    }
-  },
-
-  handleGoogleCallback: async (code: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await authService.handleGoogleCallback(code);
-      set({ user: response.user, isAuthenticated: true, isLoading: false });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Authentication failed', isLoading: false });
-      throw error;
-    }
-  },
-
-  fetchUser: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const user = await authService.getCurrentUser();
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      set({ user: null, isAuthenticated: false, isLoading: false });
-    }
-  },
-
-  logout: async () => {
-    await authService.logout();
-    set({ user: null, isAuthenticated: false, error: null });
-  },
-
-  clearError: () => set({ error: null }),
+  user: { id: 'local-user', email: 'user@physiq.local', displayName: 'Sharon' },
+  login: () => {},
+  logout: () => {},
+  fetchUser: () => {},
+  demoLogin: () => {},
+  clearError: () => {},
 }));
 
 export const useAuth = useAuthStore;

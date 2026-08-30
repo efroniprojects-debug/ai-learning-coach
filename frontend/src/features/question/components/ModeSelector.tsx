@@ -1,18 +1,4 @@
-export type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
-
-interface ModeOption {
-  id: Mode;
-  icon: string;
-  label: string;
-  tooltip: string;
-}
-
-const MODES: ModeOption[] = [
-  { id: 'step_by_step', icon: '🔍', label: 'שלב-אחר-שלב', tooltip: 'פירוק הבעיה ל-4-6 שלבים ממוספרים — מתאים ללמידה עמוקה' },
-  { id: 'full', icon: '⚡', label: 'פתרון מלא', tooltip: 'פתרון מיידי ומלא עם כל הפרטים — מתאים לחזרה מהירה' },
-  { id: 'diagnose', icon: '🩺', label: 'אבחן טעות', tooltip: 'שתף את הניסיון השגוי שלך — המורה יאתר בדיוק היכן הטעות' },
-  { id: 'concept', icon: '💡', label: 'הסבר מושג', tooltip: 'הסבר אינטואיטיבי דרך אנלוגיה מהחיים — מתאים להבנת עקרון' },
-];
+type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 interface Props {
   mode: Mode;
@@ -20,24 +6,51 @@ interface Props {
   disabled?: boolean;
 }
 
+const MODES: { id: Mode; label: string; emoji: string; tooltip: string }[] = [
+  {
+    id: 'step_by_step',
+    label: 'שלב-אחר-שלב',
+    emoji: '🔍',
+    tooltip: 'המורה יפרק את הפתרון לשלבים ממוספרים ויוביל אותך להבנה מלאה',
+  },
+  {
+    id: 'full',
+    label: 'פתרון מלא מיידי',
+    emoji: '⚡',
+    tooltip: 'פתרון מלא — נתונים, נוסחה, הצבה, חישוב ותשובה עם יחידות',
+  },
+  {
+    id: 'diagnose',
+    label: 'אבחן את הטעות שלי',
+    emoji: '🩺',
+    tooltip: 'שתף את הניסיון שלך — המורה יזהה בדיוק איפה הטעות ויעזור לתקן',
+  },
+  {
+    id: 'concept',
+    label: 'הסבר מושג',
+    emoji: '💡',
+    tooltip: 'הסבר עמוק של מושג — אנלוגיה מהחיים, הגדרה פורמלית, נוסחה ודוגמאות',
+  },
+];
+
 export function ModeSelector({ mode, onChange, disabled }: Props) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2" dir="rtl">
+    <div dir="rtl" className="flex flex-wrap gap-2">
       {MODES.map((m) => (
         <button
           key={m.id}
-          title={m.tooltip}
-          disabled={disabled}
           onClick={() => onChange(m.id)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors text-right
-            ${mode === m.id
-              ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold'
-              : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/30'
-            }
-            ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-          `}
+          disabled={disabled}
+          title={m.tooltip}
+          className={[
+            'flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium',
+            'transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed',
+            mode === m.id
+              ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+              : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50',
+          ].join(' ')}
         >
-          <span className="text-base">{m.icon}</span>
+          <span>{m.emoji}</span>
           <span>{m.label}</span>
         </button>
       ))}
