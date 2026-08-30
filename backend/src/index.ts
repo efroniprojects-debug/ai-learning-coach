@@ -196,8 +196,35 @@ async function startServer() {
     })
   );
 
-  // ─── Ask Question (Multi-provider, BYOK-aware) ────────────────────────────
-  app.post('/api/v1/questions/ask', async (request, reply) => {
+  // ─── Question Routes (streaming, RAG, conversations) ─────────────────────
+  if (dbAvailable && jwtAvailable) {
+    const { questionRoutes } = await import('./routes/question.routes');
+    await app.register(questionRoutes);
+    app.log.info('Question routes registered (streaming + RAG enabled)');
+  }
+
+  // ─── Physics Topic & PhET routes (no auth required) ──────────────────────
+  {
+    const { PHYSICS_TOPIC_TAXONOMY, PHET_SIMULATIONS } = await import('@/config/subjects');
+
+    app.get('/api/v1/physics/topics', async (_req, reply) => {
+      return reply.send(PHYSICS_TOPIC_TAXONOMY);
+    });
+
+    app.get<{ Querystring: { subtopic?: string } }>(
+      '/api/v1/physics/phet',
+      async (request, reply) => {
+        const subtopic = request.query.subtopic;
+        if (!subtopic) return reply.send([]);
+        const sims = PHET_SIMULATIONS[subtopic] ?? [];
+        return reply.send(sims);
+      }
+    );
+  }
+
+  // ─── Ask Question (Multi-provider, BYOK-aware fallback) ──────────────────
+  // Only register when questionRoutes is NOT loaded (DB unavailable)
+  if (!dbAvailable || !jwtAvailable) app.post('/api/v1/questions/ask', async (request, reply) => {
     const body = request.body as { question?: string; text?: string; provider?: string };
     const question = body.question || body.text; // accept both field names
 

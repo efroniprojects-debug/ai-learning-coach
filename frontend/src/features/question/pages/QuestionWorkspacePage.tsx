@@ -2,6 +2,9 @@ import { useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
+import { ModeSelector, type Mode } from '../components/ModeSelector';
+import { TopicSelector } from '../components/TopicSelector';
+import { PhetPanel, type PhetSim } from '../components/PhetPanel';
 import type { TutorResponse } from '../types';
 
 type Provider = 'claude' | 'gemini' | 'openai';
@@ -25,10 +28,22 @@ export function QuestionWorkspacePage() {
   const [provider, setProvider] = useState<Provider>('claude');
   const [isFollowUp, setIsFollowUp] = useState(false);
 
+  // Sprint 6 additions
+  const [mode, setMode] = useState<Mode>('step_by_step');
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(null);
+  const [phetSims, setPhetSims] = useState<PhetSim[]>([]);
+  const [showTopicPanel, setShowTopicPanel] = useState(false);
+
   const abortRef = useRef<AbortController | null>(null);
 
-  const handleSubmitQuestion = useCallback(async (text: string) => {
-    // Cancel any in-progress stream
+  const handleSubmitQuestion = useCallback(async (rawText: string) => {
+    // Prepend topic context if a subtopic is selected
+    const text =
+      selectedTopic && selectedSubtopic
+        ? `[נושא: ${selectedTopic} → ${selectedSubtopic}]\n${rawText}`
+        : rawText;
+
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
@@ -48,6 +63,7 @@ export function QuestionWorkspacePage() {
           text,
           subjectId: 'physics',
           conversationId: isFollowUp ? conversationId : undefined,
+          mode,
         }),
         signal: abortRef.current.signal,
       });
@@ -103,12 +119,11 @@ export function QuestionWorkspacePage() {
       }
     } catch (err: unknown) {
       if ((err as Error).name === 'AbortError') return;
-      const msg =
-        err instanceof Error ? err.message : 'שגיאה לא צפויה';
+      const msg = err instanceof Error ? err.message : 'שגיאה לא צפויה';
       setError(msg);
       setIsStreaming(false);
     }
-  }, [token, conversationId, isFollowUp]);
+  }, [token, conversationId, isFollowUp, mode, selectedTopic, selectedSubtopic]);
 
   const handleNewConversation = () => {
     setConversationId(null);
@@ -118,10 +133,15 @@ export function QuestionWorkspacePage() {
     setIsFollowUp(false);
   };
 
+  const handleTopicSelect = (topic: string, subtopic: string) => {
+    setSelectedTopic(topic);
+    setSelectedSubtopic(subtopic);
+  };
+
   return (
     <div className="max-w-6xl mx-auto py-8 px-4" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 text-sm">
             → חזרה לדשבורד
@@ -175,7 +195,49 @@ export function QuestionWorkspacePage() {
             </div>
           </div>
 
-          {/* Follow-up toggle (shown after first answer) */}
+          {/* Mode selector */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">מצב הסבר:</p>
+            <ModeSelector mode={mode} onChange={setMode} disabled={isStreaming} />
+          </div>
+
+          {/* Topic selector toggle */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowTopicPanel((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <span>📚</span>
+                <span>בחר נושא</span>
+                {selectedSubtopic && (
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                    {selectedSubtopic}
+                  </span>
+                )}
+              </span>
+              <span className="text-gray-400 text-xs">{showTopicPanel ? '▲' : '▼'}</span>
+            </button>
+
+            {showTopicPanel && (
+              <div className="p-3 space-y-3 border-t border-gray-100">
+                <TopicSelector
+                  selectedTopic={selectedTopic}
+                  selectedSubtopic={selectedSubtopic}
+                  onSelect={handleTopicSelect}
+                  onPhetSims={setPhetSims}
+                />
+                {/* PhET panel shown when a subtopic is selected */}
+                {selectedSubtopic && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <PhetPanel sims={phetSims} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Follow-up toggle */}
           {conversationId && response && (
             <label className="flex items-center gap-3 cursor-pointer p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <input
@@ -210,7 +272,6 @@ export function QuestionWorkspacePage() {
             </div>
           )}
 
-          {/* Conversation context indicator */}
           {conversationId && (
             <div className="text-xs text-gray-400 text-center">
               שיחה פעילה · {isFollowUp ? 'שאלת המשך בהקשר' : 'שאלה חדשה'}

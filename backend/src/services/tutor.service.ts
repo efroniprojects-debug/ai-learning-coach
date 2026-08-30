@@ -5,6 +5,36 @@ import { aiGateway } from '@/ai/gateway';
 import { getSubjectConfig } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
 
+// ── Tutor modes ───────────────────────────────────────────────────────────────
+
+export type TutorMode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
+
+const MODE_PROMPTS: Record<TutorMode, string> = {
+  step_by_step: `
+פעל במצב: שלב-אחר-שלב (STEP_BY_STEP).
+- פרק את הפתרון ל-4-6 שלבים ממוספרים.
+- כל שלב: כותרת "מה עושים", תוכן מפורט, נוסחה רלוונטית.
+- בסוף כל שלב: "האם הבנת את השלב הזה? כן / צריך הסבר נוסף?"
+- אל תגיד את התשובה הסופית לפני שהתלמיד עבר כל השלבים.`,
+  full: `
+פעל במצב: פתרון מלא (FULL_SOLUTION).
+- ספק פתרון מלא ומיידי: נתונים → נוסחה → הצבה → חישוב → תשובה + יחידות.
+- הוסף "נקודת תובנה": מדוע הגישה הזו עובדת, מה אפשר להכליל.
+- תן את הפתרון ב-steps[] עם כל הפרטים.`,
+  diagnose: `
+פעל במצב: אבחון טעות (DIAGNOSE).
+- התלמיד שיתף ניסיון שגוי. אל תפתור מחדש.
+- זהה בדיוק את השלב שבו הטעות נמצאת.
+- ב-explanation: "מצאתי את הטעות ב..." + הסבר מה שגוי ולמה.
+- ב-socraticQuestion: שאלה מובילה שתעזור לתלמיד לתקן בעצמו.
+- ב-hints[]: 3 רמזים מדורגים לתיקון.`,
+  concept: `
+פעל במצב: הסבר מושג (CONCEPT).
+- אנלוגיה מהחיים קודם, אחר כך הגדרה פורמלית, אחר כך נוסחה.
+- ב-explanation: האנלוגיה וההסבר האינטואיטיבי.
+- ב-steps[]: הגדרה פורמלית → נוסחה → דוגמה מספרית → דוגמה ממבחן בגרות.`,
+};
+
 // ── Structured response schema (Zod) ─────────────────────────────────────────
 
 export const TutorStepSchema = z.object({
@@ -33,7 +63,8 @@ export interface TutorQuestion {
   imageUrls?: string[];
   userId: string;
   subjectId?: string;
-  conversationId?: string; // If follow-up question
+  conversationId?: string;
+  mode?: TutorMode;
 }
 
 export interface TutorFullResponse {
@@ -90,10 +121,12 @@ export class TutorService {
       { role: 'user', content: userMessageContent },
     ];
 
+    const systemPrompt = this.buildSystemPrompt(subject.systemPrompt, question.mode);
+
     // Call AI
     const aiResponse = await aiGateway.generateResponse({
       messages,
-      systemPrompt: subject.systemPrompt,
+      systemPrompt,
       maxTokens: 2048,
       temperature: 0.7,
     });
@@ -164,11 +197,13 @@ export class TutorService {
       { role: 'user', content: userMessageContent },
     ];
 
+    const systemPrompt = this.buildSystemPrompt(subject.systemPrompt, question.mode);
+
     let fullText = '';
 
     for await (const chunk of aiGateway.generateStream({
       messages,
-      systemPrompt: subject.systemPrompt,
+      systemPrompt,
       maxTokens: 2048,
       temperature: 0.7,
     })) {
@@ -282,6 +317,11 @@ ${previousExplanation}
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
+  }
+
+  private static buildSystemPrompt(basePrompt: string, mode?: TutorMode): string {
+    if (!mode || mode === 'step_by_step') return MODE_PROMPTS.step_by_step + '\n\n' + basePrompt;
+    return MODE_PROMPTS[mode] + '\n\n' + basePrompt;
   }
 
   private static buildUserPrompt(questionText: string, contextText: string): string {
