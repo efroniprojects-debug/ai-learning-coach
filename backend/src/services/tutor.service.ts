@@ -193,7 +193,7 @@ export class TutorService {
     ];
 
     // Use generateContent with X-goog-api-key header (supports AQ. format keys)
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`;
 
     const geminiRes = await fetch(apiUrl, {
       method: 'POST',
