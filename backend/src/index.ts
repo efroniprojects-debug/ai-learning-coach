@@ -8,7 +8,13 @@ async function startServer() {
   const app = Fastify({ logger: true });
 
   // Open CORS — allow all origins for cross-device access (phone, tablet, desktop)
-  await app.register(cors, { origin: true, credentials: false });
+  await app.register(cors, {
+    origin: true,
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Content-Type'],
+  });
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/', async () => ({

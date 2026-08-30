@@ -101,6 +101,9 @@ export async function questionRoutes(app: FastifyInstance) {
       reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
       reply.raw.setHeader('Connection', 'keep-alive');
       reply.raw.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+      reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+      reply.raw.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      reply.raw.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       reply.raw.flushHeaders();
 
       const sendEvent = (data: object) => {
