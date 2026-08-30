@@ -108,6 +108,10 @@ export async function questionRoutes(app: FastifyInstance) {
 
       const sendEvent = (data: object) => {
         reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+        // Force flush for Railway/nginx buffering
+        if (typeof (reply.raw as any).flush === 'function') {
+          (reply.raw as any).flush();
+        }
       };
 
       // Clean up on client disconnect

@@ -150,9 +150,10 @@ export class TutorService {
       { role: 'user', parts: currentParts },
     ];
 
-    const streamUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    // Use generateContent (simpler, more reliable than SSE streaming)
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
-    const geminiRes = await fetch(streamUrl, {
+    const geminiRes = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents }),
@@ -163,34 +164,17 @@ export class TutorService {
       throw new Error(errData.error?.message || `Gemini API error: ${geminiRes.status}`);
     }
 
-    // Parse SSE stream from Gemini
-    const reader = geminiRes.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let fullText = '';
+    const geminiData = (await geminiRes.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+    const fullText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!fullText) throw new Error('Gemini returned empty response');
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
-        if (!raw || raw === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(raw) as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          const delta = parsed.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-          if (delta) {
-            fullText += delta;
-            yield { type: 'delta', text: delta };
-          }
-        } catch { /* skip malformed lines */ }
-      }
+    // Send text in chunks to simulate streaming
+    const chunkSize = 50;
+    for (let i = 0; i < fullText.length; i += chunkSize) {
+      yield { type: 'delta', text: fullText.slice(i, i + chunkSize) };
     }
 
     const structured = this.parseStructuredResponse(fullText);
