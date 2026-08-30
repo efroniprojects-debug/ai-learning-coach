@@ -50,6 +50,28 @@ export interface TutorFullResponse {
 }
 
 const MAX_HISTORY_MESSAGES = 6;
+const DB_TIMEOUT_MS = 5_000;
+const GEMINI_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`${operation}_TIMEOUT_AFTER_${timeoutMs}MS`)),
+      timeoutMs
+    );
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
 
 export class TutorService {
   static async answerQuestion(
@@ -121,16 +143,21 @@ export class TutorService {
     let convId = 'no-db-' + Date.now();
     let history: import('@/ai/types').AIMessage[] = [];
     try {
-      convId = await this.getOrCreateConversation(
-        question.userId, question.text, subjectId, question.conversationId
-      );
-      history = await this.loadHistory(convId);
-      const userMessageContent = this.buildUserPrompt(
-        question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
-      );
-      await db.insert(conversationMessages).values({
-        conversationId: convId, role: 'user', content: userMessageContent,
-      });
+      const prepared = await withTimeout((async () => {
+        const conversationId = await this.getOrCreateConversation(
+          question.userId, question.text, subjectId, question.conversationId
+        );
+        const conversationHistory = await this.loadHistory(conversationId);
+        const userMessageContent = this.buildUserPrompt(
+          question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+        );
+        await db.insert(conversationMessages).values({
+          conversationId, role: 'user', content: userMessageContent,
+        });
+        return { conversationId, conversationHistory };
+      })(), DB_TIMEOUT_MS, 'DB_PREPARE');
+      convId = prepared.conversationId;
+      history = prepared.conversationHistory;
     } catch (dbErr) {
       console.warn('DB unavailable, continuing without history:', String(dbErr));
     }
@@ -143,7 +170,6 @@ export class TutorService {
     const apiKey = process.env.DEMO_GEMINI_API_KEY;
     if (!apiKey) throw new Error('DEMO_GEMINI_API_KEY is not configured');
 
-    const modelName = 'gemini-1.5-flash';
     const promptText = `${systemPrompt}\n\n${userMessageContent}`;
 
     // Build history parts for multi-turn
@@ -176,19 +202,35 @@ export class TutorService {
         'X-goog-api-key': apiKey,
       },
       body: JSON.stringify({ contents }),
+      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     });
 
-    if (!geminiRes.ok) {
-      const errData = (await geminiRes.json()) as { error?: { message?: string } };
-      throw new Error(errData.error?.message || `Gemini API error: ${geminiRes.status}`);
-    }
+    const rawGeminiResponse = await geminiRes.text();
 
-    const geminiData = (await geminiRes.json()) as {
+    let geminiData: {
+      error?: { message?: string };
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      promptFeedback?: { blockReason?: string };
     };
 
-    const fullText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    if (!fullText) throw new Error('Gemini returned empty response');
+    try {
+      geminiData = JSON.parse(rawGeminiResponse) as typeof geminiData;
+    } catch {
+      throw new Error(`Gemini returned invalid JSON (HTTP ${geminiRes.status})`);
+    }
+
+    if (!geminiRes.ok) {
+      throw new Error(geminiData.error?.message || `Gemini API error: ${geminiRes.status}`);
+    }
+
+    const fullText = geminiData.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text ?? '')
+      .join('')
+      .trim() ?? '';
+    if (!fullText) {
+      const blockReason = geminiData.promptFeedback?.blockReason ?? 'none';
+      throw new Error(`Gemini returned empty response (blockReason: ${blockReason})`);
+    }
 
     // Send text in chunks to simulate streaming
     const chunkSize = 50;
@@ -200,12 +242,14 @@ export class TutorService {
 
     let savedMsgId = 'no-db-' + Date.now();
     try {
-      const [savedMsg] = await db
-        .insert(conversationMessages)
-        .values({ conversationId: convId, role: 'assistant', content: fullText, structuredData: structured })
-        .returning({ id: conversationMessages.id });
-      savedMsgId = savedMsg.id;
-      await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, convId));
+      savedMsgId = await withTimeout((async () => {
+        const [savedMsg] = await db
+          .insert(conversationMessages)
+          .values({ conversationId: convId, role: 'assistant', content: fullText, structuredData: structured })
+          .returning({ id: conversationMessages.id });
+        await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, convId));
+        return savedMsg.id;
+      })(), DB_TIMEOUT_MS, 'DB_SAVE_ASSISTANT');
     } catch (dbErr) {
       console.warn('Could not save assistant message to DB:', String(dbErr));
     }

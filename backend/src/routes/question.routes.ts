@@ -29,6 +29,25 @@ const streamQuestionBodySchema = z.object({
 type AskQuestionBody = z.infer<typeof askQuestionBodySchema>;
 type StreamQuestionBody = z.infer<typeof streamQuestionBodySchema>;
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`${operation}_TIMEOUT_AFTER_${timeoutMs}MS`)),
+      timeoutMs
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 export async function questionRoutes(app: FastifyInstance) {
@@ -96,8 +115,12 @@ export async function questionRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: 'Invalid request' });
       }
 
+      // The route owns the raw response for the lifetime of the SSE stream.
+      // Without hijack Fastify may auto-complete the response with an empty body.
+      reply.hijack();
+
       // Set SSE headers — must happen before any write
-      reply.raw.setHeader('Content-Type', 'text/event-stream');
+      reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
       reply.raw.setHeader('Connection', 'keep-alive');
       reply.raw.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
@@ -106,28 +129,37 @@ export async function questionRoutes(app: FastifyInstance) {
       reply.raw.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       reply.raw.flushHeaders();
 
-      const sendEvent = (data: object) => {
+      const sendEvent = (data: object): boolean => {
+        if (reply.raw.destroyed || reply.raw.writableEnded) return false;
         reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
-        // Force flush for Railway/nginx buffering
-        if (typeof (reply.raw as any).flush === 'function') {
-          (reply.raw as any).flush();
-        }
+        return true;
       };
 
-      // Clean up on client disconnect
-      request.raw.on('close', () => {
-        reply.raw.end();
-      });
+      // This first event proves that the handler started and prevents an empty
+      // 200 response while RAG or Gemini are still working.
+      sendEvent({ type: 'status', stage: 'route_started' });
 
       try {
         // RAG: try DB search, fall back to empty if DB unavailable
         let ragContext: Awaited<ReturnType<typeof KnowledgeService.searchChunks>> = [];
+        sendEvent({ type: 'status', stage: 'rag_started' });
         try {
-          ragContext = await KnowledgeService.searchChunks(body.text, 5);
+          ragContext = await withTimeout(
+            KnowledgeService.searchChunks(body.text, 5),
+            5_000,
+            'RAG'
+          );
+          sendEvent({ type: 'status', stage: 'rag_completed', chunks: ragContext.length });
         } catch (ragErr) {
           app.log.warn('RAG search failed, continuing without context: ' + String(ragErr));
+          sendEvent({
+            type: 'status',
+            stage: 'rag_skipped',
+            reason: ragErr instanceof Error ? ragErr.message : String(ragErr),
+          });
         }
 
+        sendEvent({ type: 'status', stage: 'gemini_started' });
         for await (const event of TutorService.streamAnswer(
           {
             text: body.text,
@@ -159,7 +191,7 @@ export async function questionRoutes(app: FastifyInstance) {
           message: error instanceof Error ? error.message : 'Stream failed',
         });
       } finally {
-        reply.raw.end();
+        if (!reply.raw.writableEnded) reply.raw.end();
       }
     }
   );

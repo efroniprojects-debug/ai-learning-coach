@@ -66,6 +66,7 @@ export function QuestionWorkspacePage() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -89,17 +90,22 @@ export function QuestionWorkspacePage() {
             setConversationId(d.conversationId);
             setIsStreaming(false);
             setImageData(null);
+            receivedDone = true;
           } else if (event.type === 'error') {
             throw new Error((event.message as string) || 'Stream error');
           }
         }
+      }
+
+      if (!receivedDone) {
+        throw new Error('החיבור לשרת נסגר לפני שהתקבלה תשובה מלאה');
       }
     } catch (err: unknown) {
       if ((err as Error).name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'שגיאה לא צפויה');
       setIsStreaming(false);
     }
-  }, [conversationId, isFollowUp, mode, selectedTopic, selectedSubtopic]);
+  }, [conversationId, imageData, isFollowUp, mode, selectedTopic, selectedSubtopic]);
 
   const handleNewConversation = () => {
     setConversationId(null); setResponse(null); setStreamText(''); setError(null); setIsFollowUp(false);
