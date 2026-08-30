@@ -26,7 +26,10 @@ export class DriveService {
   private static lastSyncAt: string | null = null;
 
   static isConfigured(): boolean {
-    return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_DRIVE_FOLDER_ID);
+    return Boolean(
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON &&
+      (process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID)
+    );
   }
 
   static getLastSyncAt(): string | null {
@@ -54,16 +57,40 @@ export class DriveService {
 
   static async listFiles(): Promise<DriveFileSummary[]> {
     if (!this.isConfigured()) return [];
-    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID as string;
+    const folderId = (
+      process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID ||
+      process.env.GOOGLE_DRIVE_FOLDER_ID
+    ) as string;
     const drive = this.getClient();
-    const result = await drive.files.list({
-      q: `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`,
-      fields: 'files(id,name,mimeType,modifiedTime,size)',
-      orderBy: 'modifiedTime desc',
-      pageSize: 100,
-    });
+    const discovered: drive_v3.Schema$File[] = [];
+    const foldersToScan = [folderId];
+    const visited = new Set<string>();
 
-    return (result.data.files ?? [])
+    while (foldersToScan.length > 0) {
+      const currentFolder = foldersToScan.shift() as string;
+      if (visited.has(currentFolder)) continue;
+      visited.add(currentFolder);
+      let pageToken: string | undefined;
+      do {
+        const result = await drive.files.list({
+          q: `'${currentFolder.replace(/'/g, "\\'")}' in parents and trashed = false`,
+          fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,size)',
+          orderBy: 'modifiedTime desc',
+          pageSize: 100,
+          pageToken,
+        });
+        for (const file of result.data.files ?? []) {
+          if (file.mimeType === 'application/vnd.google-apps.folder' && file.id) {
+            foldersToScan.push(file.id);
+          } else {
+            discovered.push(file);
+          }
+        }
+        pageToken = result.data.nextPageToken ?? undefined;
+      } while (pageToken);
+    }
+
+    return discovered
       .filter((file): file is drive_v3.Schema$File & { id: string; name: string; mimeType: string } =>
         Boolean(file.id && file.name && file.mimeType)
       )

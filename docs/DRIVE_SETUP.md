@@ -15,14 +15,18 @@
 
 ## 3. הגדרת Railway
 
-הוסיפו לשירות ה־Backend שני משתני סביבה:
+הוסיפו לשירות ה־Backend את משתני הסביבה הבאים:
 
 ```env
-GOOGLE_DRIVE_FOLDER_ID=מזהה_התיקייה
+GOOGLE_DRIVE_FOLDER_ID=1h2UuAmDBveKi-XGYhsNMw1fe317pHZ9r
+GOOGLE_DRIVE_STORAGE_FOLDER_ID=1Rxoj4LFuVqWNZoMUig4SQ31JRht2k53m
+GOOGLE_DRIVE_EXAMS_ROOT_FOLDER_ID=1uSsFWQbN2pPtgayHpghQKSWKIcO1M32b
+GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID=1h2UuAmDBveKi-XGYhsNMw1fe317pHZ9r
 GOOGLE_SERVICE_ACCOUNT_JSON={תוכן קובץ ה-JSON בשורה אחת}
 ```
 
-אין להוסיף מרכאות חיצוניות סביב ה־JSON. לאחר השמירה Railway יבצע פריסה מחדש.
+אין להוסיף מרכאות חיצוניות סביב ה־JSON. הקוד סורק באופן רקורסיבי את תיקיית
+בגרויות הפיזיקה ואת תיקיות המשנה שלה. לאחר השמירה Railway יבצע פריסה מחדש.
 
 ## 4. בדיקה
 
