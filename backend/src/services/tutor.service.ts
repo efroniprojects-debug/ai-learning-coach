@@ -61,19 +61,27 @@ export class TutorService {
 
     await aiGateway.initializeForUser(question.userId);
 
-    const convId = await this.getOrCreateConversation(
-      question.userId, question.text, subjectId, question.conversationId
-    );
-
-    const history = await this.loadHistory(convId);
+    // Try DB operations, fall back gracefully if unavailable
+    let convId = 'no-db-' + Date.now();
+    let history: import('@/ai/types').AIMessage[] = [];
+    try {
+      convId = await this.getOrCreateConversation(
+        question.userId, question.text, subjectId, question.conversationId
+      );
+      history = await this.loadHistory(convId);
+      const userMessageContent = this.buildUserPrompt(
+        question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+      );
+      await db.insert(conversationMessages).values({
+        conversationId: convId, role: 'user', content: userMessageContent,
+      });
+    } catch (dbErr) {
+      console.warn('DB unavailable, continuing without history:', String(dbErr));
+    }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
       question.text, contextText, question.topic, question.subtopic
     );
-
-    await db.insert(conversationMessages).values({
-      conversationId: convId, role: 'user', content: userMessageContent,
-    });
 
     const messages: AIMessage[] = [
       ...history,
@@ -109,19 +117,27 @@ export class TutorService {
     const subjectId = question.subjectId ?? 'physics';
     const systemPrompt = buildSystemPrompt(question.mode);
 
-    const convId = await this.getOrCreateConversation(
-      question.userId, question.text, subjectId, question.conversationId
-    );
-
-    const history = await this.loadHistory(convId);
+    // Try DB operations, fall back gracefully if unavailable
+    let convId = 'no-db-' + Date.now();
+    let history: import('@/ai/types').AIMessage[] = [];
+    try {
+      convId = await this.getOrCreateConversation(
+        question.userId, question.text, subjectId, question.conversationId
+      );
+      history = await this.loadHistory(convId);
+      const userMessageContent = this.buildUserPrompt(
+        question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+      );
+      await db.insert(conversationMessages).values({
+        conversationId: convId, role: 'user', content: userMessageContent,
+      });
+    } catch (dbErr) {
+      console.warn('DB unavailable, continuing without history:', String(dbErr));
+    }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
       question.text, contextText, question.topic, question.subtopic
     );
-
-    await db.insert(conversationMessages).values({
-      conversationId: convId, role: 'user', content: userMessageContent,
-    });
 
     // ── Gemini direct call (supports Vision when imageData present) ──────────
     const apiKey = process.env.DEMO_GEMINI_API_KEY;
@@ -182,19 +198,24 @@ export class TutorService {
 
     const structured = this.parseStructuredResponse(fullText);
 
-    const [savedMsg] = await db
-      .insert(conversationMessages)
-      .values({ conversationId: convId, role: 'assistant', content: fullText, structuredData: structured })
-      .returning({ id: conversationMessages.id });
-
-    await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, convId));
+    let savedMsgId = 'no-db-' + Date.now();
+    try {
+      const [savedMsg] = await db
+        .insert(conversationMessages)
+        .values({ conversationId: convId, role: 'assistant', content: fullText, structuredData: structured })
+        .returning({ id: conversationMessages.id });
+      savedMsgId = savedMsg.id;
+      await db.update(conversations).set({ updatedAt: new Date() }).where(eq(conversations.id, convId));
+    } catch (dbErr) {
+      console.warn('Could not save assistant message to DB:', String(dbErr));
+    }
 
     yield {
       type: 'done',
       data: {
         structured,
         conversationId: convId,
-        messageId: savedMsg.id,
+        messageId: savedMsgId,
         rawText: fullText,
         sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
       },

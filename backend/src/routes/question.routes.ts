@@ -120,7 +120,13 @@ export async function questionRoutes(app: FastifyInstance) {
       });
 
       try {
-        const ragContext = await KnowledgeService.searchChunks(body.text, 5);
+        // RAG: try DB search, fall back to empty if DB unavailable
+        let ragContext: Awaited<ReturnType<typeof KnowledgeService.searchChunks>> = [];
+        try {
+          ragContext = await KnowledgeService.searchChunks(body.text, 5);
+        } catch (ragErr) {
+          app.log.warn('RAG search failed, continuing without context: ' + String(ragErr));
+        }
 
         for await (const event of TutorService.streamAnswer(
           {
