@@ -35,16 +35,12 @@ export function AISettingsPanel() {
     reset,
   } = useForm<AISettingsFormData>({
     resolver: zodResolver(aiSettingsSchema),
-    defaultValues: {
-      provider: 'claude',
-    },
+    defaultValues: { provider: 'claude' },
   });
 
   const selectedProvider = watch('provider');
 
-  useEffect(() => {
-    loadConfigs();
-  }, []);
+  useEffect(() => { loadConfigs(); }, []);
 
   const loadConfigs = async () => {
     try {
@@ -52,8 +48,8 @@ export function AISettingsPanel() {
       setConfigs(data);
       const active = data.find((c) => c.isActive);
       setActiveConfig(active?.id || null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load configs');
+    } catch {
+      // silently ignore
     }
   };
 
@@ -61,18 +57,15 @@ export function AISettingsPanel() {
     setIsLoading(true);
     setError(null);
     setSuccess(false);
-
     try {
-      const config = await authService.saveAIProviderConfig(
-        data.provider,
-        data.model,
-        data.apiKey
-      );
-
+      const config = await authService.saveAIProviderConfig({
+        provider: data.provider,
+        model: data.model,
+        apiKey: data.apiKey,
+      });
       setConfigs((prev) => [...prev, config]);
       setSuccess(true);
       reset();
-
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
@@ -83,7 +76,7 @@ export function AISettingsPanel() {
 
   const handleActivate = async (configId: string) => {
     try {
-      await authService.setActiveAIProvider(configId);
+      await authService.activateAIProviderConfig(configId);
       setActiveConfig(configId);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -96,53 +89,38 @@ export function AISettingsPanel() {
     try {
       await authService.deleteAIProviderConfig(configId);
       setConfigs((prev) => prev.filter((c) => c.id !== configId));
-      if (activeConfig === configId) {
-        setActiveConfig(null);
-      }
+      if (activeConfig === configId) setActiveConfig(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete config');
     }
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl" dir="rtl">
       <div>
-        <h2 className="text-2xl font-bold mb-4">הגדרות AI</h2>
-        <p className="text-gray-600 mb-6">
-          בחר ספק AI ויעלה את שלך API Key כדי להתחיל. אנחנו לעולם לא חושפים מפתחות ל-client.
-        </p>
+        <h2 className="text-2xl font-bold mb-2">הגדרות AI</h2>
+        <p className="text-gray-500 text-sm mb-6">הזן את ה-API Key שלך כדי להפעיל את המורה הווירטואלי.</p>
       </div>
 
-      {/* Add New Provider */}
-      <form onSubmit={handleSubmit(onSubmit)} className="border rounded-lg p-6 space-y-4">
-        <h3 className="text-lg font-semibold">הוסף ספק AI חדש</h3>
+      <form onSubmit={handleSubmit(onSubmit)} className="border border-gray-200 rounded-xl p-6 space-y-4">
+        <h3 className="text-lg font-semibold">הוסף ספק AI</h3>
 
         <div>
           <label className="block text-sm font-medium mb-1">ספק</label>
-          <select
-            {...register('provider')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="claude">Claude (Anthropic)</option>
+          <select {...register('provider')} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="claude">Claude (Anthropic) — מומלץ</option>
             <option value="gemini">Gemini (Google)</option>
-            <option value="openai">OpenAI</option>
+            <option value="openai">GPT-4o (OpenAI)</option>
           </select>
-          {errors.provider && <p className="text-red-600 text-sm mt-1">{errors.provider.message}</p>}
         </div>
 
-        {/* Provider Guide */}
         <ProviderGuide provider={selectedProvider as 'claude' | 'gemini' | 'openai'} />
 
         <div>
           <label className="block text-sm font-medium mb-1">מודל</label>
-          <select
-            {...register('model')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
+          <select {...register('model')} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             {AVAILABLE_MODELS[selectedProvider]?.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
+              <option key={model} value={model}>{model}</option>
             ))}
           </select>
           {errors.model && <p className="text-red-600 text-sm mt-1">{errors.model.message}</p>}
@@ -153,61 +131,41 @@ export function AISettingsPanel() {
           <input
             type="password"
             {...register('apiKey')}
-            placeholder="Your API key (never logged or shared)"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="sk-ant-... או AIza... או sk-..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {errors.apiKey && <p className="text-red-600 text-sm mt-1">{errors.apiKey.message}</p>}
         </div>
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-            ✓ הגדרות נשמרו בהצלחה
-          </div>
-        )}
+        {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+        {success && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">✓ נשמר בהצלחה</div>}
 
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
         >
-          {isLoading ? 'Saving...' : 'Save Settings'}
+          {isLoading ? 'שומר...' : 'שמור הגדרות'}
         </button>
       </form>
 
-      {/* Active Providers */}
       {configs.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold">שלך ספקים</h3>
+          <h3 className="text-lg font-semibold">ספקים מוגדרים</h3>
           {configs.map((config) => (
-            <div key={config.id} className="flex items-center justify-between border rounded p-4">
+            <div key={config.id} className="flex items-center justify-between border border-gray-200 rounded-xl p-4">
               <div>
-                <p className="font-medium">
-                  {config.provider.toUpperCase()} - {config.model}
-                </p>
-                <p className="text-sm text-gray-600">
-                  {config.isActive ? '✓ Active' : 'Inactive'}
-                </p>
+                <p className="font-medium">{config.provider.toUpperCase()} — {config.model}</p>
+                <p className="text-sm text-gray-500">{config.isActive ? '✓ פעיל' : 'לא פעיל'}</p>
               </div>
-              <div className="space-x-2">
+              <div className="flex gap-2">
                 {!config.isActive && (
-                  <button
-                    onClick={() => handleActivate(config.id)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
-                  >
-                    Activate
+                  <button onClick={() => handleActivate(config.id)} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200">
+                    הפעל
                   </button>
                 )}
-                <button
-                  onClick={() => handleDelete(config.id)}
-                  className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
-                >
-                  Delete
+                <button onClick={() => handleDelete(config.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200">
+                  מחק
                 </button>
               </div>
             </div>
