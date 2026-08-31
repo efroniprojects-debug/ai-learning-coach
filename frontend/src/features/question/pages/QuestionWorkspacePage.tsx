@@ -13,6 +13,38 @@ import type { TutorResponse } from '../types';
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const QUESTION_TIMEOUT_MS = 120_000;
+
+export function extractStreamingExplanation(jsonText: string): string {
+  const match = /"explanation"\s*:\s*"/.exec(jsonText);
+  if (!match) return '';
+  let result = '';
+  for (let index = match.index + match[0].length; index < jsonText.length; index += 1) {
+    const character = jsonText[index];
+    if (character === '"') break;
+    if (character !== '\\') { result += character; continue; }
+    const escaped = jsonText[index + 1];
+    if (!escaped) break;
+    if (escaped === 'n') result += '\n';
+    else if (escaped === 't') result += '\t';
+    else if (escaped === 'r') result += '\r';
+    else if (escaped === 'u' && /^[0-9a-fA-F]{4}$/.test(jsonText.slice(index + 2, index + 6))) {
+      result += String.fromCharCode(Number.parseInt(jsonText.slice(index + 2, index + 6), 16));
+      index += 4;
+    } else result += escaped;
+    index += 1;
+  }
+  return result;
+}
+
+function readableQuestionError(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (/timeout/i.test(message)) return 'הכנת התשובה ארכה יותר מדי. אפשר לנסות שוב בבטחה.';
+  if (/network|fetch|connection|חיבור/i.test(message)) return 'החיבור לשרת נקטע. בדוק את החיבור ונסה שוב.';
+  if (/429|quota|rate/i.test(message)) return 'שירות המורה עמוס כרגע. המתן מעט ונסה שוב.';
+  if (/API key|Gemini.*configured/i.test(message)) return 'שירות המורה אינו מוגדר כרגע. נסה שוב מאוחר יותר.';
+  return 'לא הצלחנו להכין תשובה. אפשר לנסות שוב.';
+}
 
 const STREAM_STAGE_MESSAGES: Record<string, string> = {
   route_started: 'מתחבר למורה האישי...',
@@ -40,6 +72,8 @@ export function QuestionWorkspacePage() {
   const [celebration, setCelebration] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const abortReasonRef = useRef<'user' | 'timeout' | null>(null);
+  const lastQuestionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (routeState?.selectedTopic) setSelectedTopic(routeState.selectedTopic);
@@ -52,8 +86,15 @@ export function QuestionWorkspacePage() {
   }, []);
 
   const handleSubmitQuestion = useCallback(async (text: string) => {
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
+    if (isStreaming) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    abortReasonRef.current = null;
+    lastQuestionRef.current = text;
+    const timeoutId = window.setTimeout(() => {
+      abortReasonRef.current = 'timeout';
+      controller.abort();
+    }, QUESTION_TIMEOUT_MS);
     setError(null);
     setIsStreaming(true);
     setStreamText('שולח את השאלה...');
@@ -88,6 +129,7 @@ export function QuestionWorkspacePage() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let streamedJson = '';
       let receivedDone = false;
 
       while (!receivedDone) {
@@ -111,9 +153,9 @@ export function QuestionWorkspacePage() {
             const stageMessage = STREAM_STAGE_MESSAGES[stage];
             if (stageMessage) setStreamText(stageMessage);
           } else if (event.type === 'delta') {
-            // The backend response is structured JSON. Never expose its raw
-            // transport representation while it is still being assembled.
-            setStreamText('מעבד ומסדר את התשובה...');
+            streamedJson += typeof event.text === 'string' ? event.text : '';
+            const explanation = extractStreamingExplanation(streamedJson);
+            setStreamText(explanation || 'מעבד ומסדר את התשובה...');
           } else if (event.type === 'done') {
             const d = event as { conversationId: string; messageId: string; structured: TutorResponse; sources: TutorResponse['sources']; masteryUpdate?: { subtopic: string; previousElo: number; elo: number; confidence: string } };
             setResponse({ ...d.structured, conversationId: d.conversationId, messageId: d.messageId, sources: d.sources });
@@ -137,11 +179,24 @@ export function QuestionWorkspacePage() {
         throw new Error('החיבור לשרת נסגר לפני שהתקבלה תשובה מלאה');
       }
     } catch (err: unknown) {
-      if ((err as Error).name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'שגיאה לא צפויה');
+      if ((err as Error).name === 'AbortError') {
+        setError(abortReasonRef.current === 'timeout'
+          ? 'הכנת התשובה ארכה יותר מדי. אפשר לנסות שוב בבטחה.'
+          : 'הפעולה בוטלה. אפשר לערוך את השאלה ולשלוח שוב.');
+      } else {
+        setError(readableQuestionError(err));
+      }
       setIsStreaming(false);
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [conversationId, document, imageData, isFollowUp, mode, selectedTopic, selectedSubtopic]);
+  }, [conversationId, document, imageData, isFollowUp, isStreaming, mode, selectedTopic, selectedSubtopic]);
+
+  const cancelQuestion = () => {
+    abortReasonRef.current = 'user';
+    abortRef.current?.abort();
+  };
 
   const handleNewConversation = () => {
     setConversationId(null); setResponse(null); setStreamText(''); setError(null); setIsFollowUp(false);
@@ -257,11 +312,9 @@ export function QuestionWorkspacePage() {
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-              <strong>שגיאה: </strong>{error}
-              {error.includes('API key') && (
-                <div className="mt-2">
-                  <Link to="/ai-settings" className="underline text-red-600">→ הגדר מפתח API בהגדרות</Link>
-                </div>
+              <strong>לא הצלחנו להשלים את הפעולה: </strong>{error}
+              {lastQuestionRef.current && !isStreaming && (
+                <button type="button" onClick={() => void handleSubmitQuestion(lastQuestionRef.current as string)} className="mt-3 block rounded-lg bg-red-700 px-3 py-2 font-semibold text-white hover:bg-red-800">נסה שוב</button>
               )}
             </div>
           )}
@@ -272,6 +325,7 @@ export function QuestionWorkspacePage() {
               response={{ conversationId: '', messageId: '', explanation: '', steps: [], hints: [], misconceptions: [], sources: [] }}
               isStreaming
               streamText={streamText}
+              onCancel={cancelQuestion}
             />
           ) : response ? (
             <ResponseDisplay response={response} />

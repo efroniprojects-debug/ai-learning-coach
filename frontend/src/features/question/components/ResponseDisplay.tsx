@@ -51,9 +51,10 @@ interface Props {
   response: TutorResponse;
   isStreaming?: boolean;
   streamText?: string;
+  onCancel?: () => void;
 }
 
-export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
+export function ResponseDisplay({ response, isStreaming, streamText, onCancel }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('explanation');
   const [revealedHints, setRevealedHints] = useState(0);
   const [speaking, setSpeaking] = useState(false);
@@ -116,6 +117,7 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
         {elapsedSeconds >= 15 && (
           <p className="mt-3 text-xs text-blue-600" role="status">זה לוקח מעט יותר זמן, אבל העבודה ממשיכה כרגיל.</p>
         )}
+        {onCancel && <button type="button" onClick={onCancel} className="mt-4 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">בטל פעולה</button>}
       </div>
     );
   }

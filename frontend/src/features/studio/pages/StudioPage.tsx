@@ -1,7 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FormattedText } from '@/features/question/components/ResponseDisplay';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const STUDIO_TIMEOUT_MS = 100_000;
+
+function readableStudioError(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (/timeout/i.test(message)) return 'יצירת התוכן ארכה יותר מדי. אפשר לנסות שוב עם אותם מקורות.';
+  if (/network|fetch|connection|חיבור/i.test(message)) return 'החיבור לשרת נקטע. המקורות נשמרו ואפשר לנסות שוב.';
+  if (/429|quota|rate/i.test(message)) return 'שירות יצירת התוכן עמוס כרגע. המתן מעט ונסה שוב.';
+  if (message && /[א-ת]/.test(message)) return message;
+  return 'יצירת התוכן נכשלה. אפשר לנסות שוב עם אותם מקורות.';
+}
 
 interface StudioSource { kind: 'drive' | 'upload'; id: string; name: string; mimeType?: string; }
 interface DriveFile { id: string; name: string; mimeType: string; }
@@ -15,12 +25,16 @@ export function StudioPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [generatingTask, setGeneratingTask] = useState<'summary' | 'practice' | null>(null);
+  const [lastTask, setLastTask] = useState<'summary' | 'practice' | null>(null);
+  const [generationStatus, setGenerationStatus] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [aggregateTopic, setAggregateTopic] = useState('');
   const [aggregating, setAggregating] = useState(false);
   const [aggregateMessage, setAggregateMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const generationAbortRef = useRef<AbortController | null>(null);
+  const generationAbortReasonRef = useRef<'user' | 'timeout' | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -79,18 +93,83 @@ export function StudioPage() {
   };
 
   const generate = async (task: 'summary' | 'practice') => {
+    if (generating) return;
     if (selectedSources.length === 0) { setError('בחר לפחות מקור לימוד אחד'); return; }
-    setGenerating(true); setGeneratingTask(task); setError(null); setResult('');
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    generationAbortReasonRef.current = null;
+    const timeoutId = window.setTimeout(() => {
+      generationAbortReasonRef.current = 'timeout';
+      controller.abort();
+    }, STUDIO_TIMEOUT_MS);
+    setGenerating(true); setGeneratingTask(task); setLastTask(task); setGenerationStatus('מתחיל לקרוא את המקורות…'); setError(null); setResult('');
     try {
-      const response = await fetch(`${API_BASE}/api/v1/studio/generate`, {
+      const requestBody = JSON.stringify({ task, sources: selectedSources });
+      let response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, sources: selectedSources }),
+        body: requestBody,
+        signal: controller.signal,
       });
-      const data = await response.json() as { content?: string; error?: string };
-      if (!response.ok || !data.content) throw new Error(data.error ?? 'יצירת התוכן נכשלה');
-      setResult(data.content);
-    } catch (err) { setError(err instanceof Error ? err.message : 'יצירת התוכן נכשלה'); }
-    finally { setGenerating(false); setGeneratingTask(null); }
+      // Preview deployments may reach the stable backend before its new SSE
+      // route is deployed. Falling back keeps Studio usable during rollout.
+      if (response.status === 404 || response.status === 405) {
+        setGenerationStatus(task === 'practice' ? 'מכין תרגול…' : 'מכין סיכום…');
+        response = await fetch(`${API_BASE}/api/v1/studio/generate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: requestBody,
+          signal: controller.signal,
+        });
+        const legacyData = await response.json() as { content?: string; error?: string };
+        if (!response.ok || !legacyData.content) throw new Error(legacyData.error ?? `HTTP ${response.status}`);
+        setResult(legacyData.content);
+        return;
+      }
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let receivedDone = false;
+      while (!receivedDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          const event = JSON.parse(raw) as { type?: string; stage?: string; completed?: number; total?: number; text?: string; content?: string; message?: string };
+          if (event.type === 'status') {
+            if (event.stage === 'source_completed') setGenerationStatus(`קורא מקור ${event.completed ?? 0} מתוך ${event.total ?? selectedSources.length}…`);
+            if (event.stage === 'gemini_started') setGenerationStatus(task === 'practice' ? 'בונה שאלות תרגול…' : 'כותב את הסיכום…');
+          } else if (event.type === 'delta' && event.text) {
+            setResult((current) => current + event.text);
+          } else if (event.type === 'done') {
+            if (event.content) setResult(event.content);
+            receivedDone = true;
+          } else if (event.type === 'error') {
+            throw new Error(event.message || 'יצירת התוכן נכשלה');
+          }
+        }
+      }
+      if (!receivedDone) throw new Error('החיבור לשרת נסגר לפני שהתוכן הושלם');
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        setError(generationAbortReasonRef.current === 'timeout'
+          ? 'יצירת התוכן ארכה יותר מדי. אפשר לנסות שוב עם אותם מקורות.'
+          : 'הפעולה בוטלה. המקורות נשמרו ואפשר לנסות שוב.');
+      } else setError(readableStudioError(err));
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (generationAbortRef.current === controller) generationAbortRef.current = null;
+      setGenerating(false); setGeneratingTask(null); setGenerationStatus('');
+    }
+  };
+
+  const cancelGeneration = () => {
+    generationAbortReasonRef.current = 'user';
+    generationAbortRef.current?.abort();
   };
 
   const aggregateVerifiedSources = async () => {
@@ -146,22 +225,23 @@ export function StudioPage() {
         <section className="min-h-[520px] rounded-xl border border-gray-200 bg-white p-6">
           <h2 className="mb-4 font-semibold text-gray-900">תוצר הלמידה</h2>
           {generating && (
-            <div className="flex h-64 flex-col items-center justify-center gap-3 text-center text-sm text-blue-700">
+            <div className={`flex flex-col items-center justify-center gap-3 text-center text-sm text-blue-700 ${result ? 'mb-5 rounded-lg bg-blue-50 p-3' : 'h-64'}`}>
               <span className="animate-pulse" role="status" aria-live="polite">
-                {generatingTask === 'practice'
+                {generationStatus || (generatingTask === 'practice'
                   ? 'SmarterAI קורא את המקורות ומכין תרגול…'
-                  : 'SmarterAI קורא את המקורות ומכין סיכום…'}
+                  : 'SmarterAI קורא את המקורות ומכין סיכום…')}
               </span>
               <span className="text-xs tabular-nums text-gray-500" aria-hidden="true">{elapsedSeconds} שניות</span>
               {elapsedSeconds >= 15 && (
                 <p className="text-xs text-blue-600" role="status">זה לוקח מעט יותר זמן, אבל העבודה ממשיכה כרגיל.</p>
               )}
+              <button type="button" onClick={cancelGeneration} className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100">בטל פעולה</button>
             </div>
           )}
           {!generating && !result && <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400">התוצר יופיע כאן</div>}
           {/* Studio returns Markdown and LaTeX, so use the same safe educational formatter as tutor answers. */}
           {result && <div className="text-sm leading-7 text-gray-800"><FormattedText text={result} /></div>}
-          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p>{error}</p><button type="button" onClick={() => setReloadToken((value) => value + 1)} className="mt-2 rounded-md bg-red-700 px-3 py-2 text-white">נסה שנית</button></div>}
+          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p>{error}</p><button type="button" onClick={() => lastTask ? void generate(lastTask) : setReloadToken((value) => value + 1)} className="mt-2 rounded-md bg-red-700 px-3 py-2 text-white">נסה שנית</button></div>}
         </section>
       </div>
     </div>

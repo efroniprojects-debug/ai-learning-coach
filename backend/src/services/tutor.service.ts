@@ -214,8 +214,9 @@ export class TutorService {
       { role: 'user', parts: currentParts },
     ];
 
-    // Use generateContent with X-goog-api-key header (supports AQ. format keys)
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`;
+    // Gemini's SSE endpoint starts returning text before the full structured
+    // response is complete, while the accumulated JSON is still parsed below.
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse';
 
     // Exact-match, per-user cache. Attachments are excluded to avoid reusing a
     // response for different binary content with the same filename.
@@ -241,24 +242,41 @@ export class TutorService {
         signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
       });
 
-      const rawGeminiResponse = await geminiRes.text();
-      let geminiData: {
-        error?: { message?: string };
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        promptFeedback?: { blockReason?: string };
-      };
-
-      try {
-        geminiData = JSON.parse(rawGeminiResponse) as typeof geminiData;
-      } catch {
-        throw new Error(`Gemini returned invalid JSON (HTTP ${geminiRes.status})`);
+      if (!geminiRes.ok) {
+        const errorData = await geminiRes.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(errorData?.error?.message || `Gemini API error: ${geminiRes.status}`);
       }
-      if (!geminiRes.ok) throw new Error(geminiData.error?.message || `Gemini API error: ${geminiRes.status}`);
+      if (!geminiRes.body) throw new Error('Gemini returned an empty stream');
 
-      fullText = geminiData.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? '';
+      const reader = geminiRes.body.getReader();
+      const decoder = new TextDecoder();
+      let streamBuffer = '';
+      fullText = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        streamBuffer += decoder.decode(value, { stream: true });
+        const lines = streamBuffer.split('\n');
+        streamBuffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw || raw === '[DONE]') continue;
+          const chunk = JSON.parse(raw) as {
+            error?: { message?: string };
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          if (chunk.error?.message) throw new Error(chunk.error.message);
+          const delta = chunk.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+          if (delta) {
+            fullText += delta;
+            yield { type: 'delta', text: delta };
+          }
+        }
+      }
+      fullText = fullText.trim();
       if (!fullText) {
-        const blockReason = geminiData.promptFeedback?.blockReason ?? 'none';
-        throw new Error(`Gemini returned empty response (blockReason: ${blockReason})`);
+        throw new Error('Gemini returned empty response');
       }
       if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
     }
