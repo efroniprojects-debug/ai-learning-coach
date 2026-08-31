@@ -6,6 +6,7 @@ import { KnowledgeService } from '@/services/knowledge.service';
 import { TutorService } from '@/services/tutor.service';
 import { db, conversations, conversationMessages, conversationFolders } from '@/db';
 import { eq, desc, and, asc, ilike, isNull } from 'drizzle-orm';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 
@@ -69,7 +70,8 @@ export async function questionRoutes(app: FastifyInstance) {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
         const body = askQuestionBodySchema.parse(request.body);
-        const ragContext = await KnowledgeService.searchChunks(body.text, 5);
+        getSubjectConfig(body.subjectId);
+        const ragContext = await KnowledgeService.searchChunks(body.text, 5, body.subjectId);
 
         const result = await TutorService.answerQuestion(
           {
@@ -116,6 +118,7 @@ export async function questionRoutes(app: FastifyInstance) {
       let body: StreamQuestionBody;
       try {
         body = streamQuestionBodySchema.parse(request.body);
+        getSubjectConfig(body.subjectId);
       } catch (error) {
         if (error instanceof z.ZodError) {
           return reply.status(400).send({ error: error.errors[0].message });
@@ -153,7 +156,7 @@ export async function questionRoutes(app: FastifyInstance) {
         sendEvent({ type: 'status', stage: 'rag_started' });
         try {
           ragContext = await withTimeout(
-            KnowledgeService.searchChunks(body.text, 5),
+            KnowledgeService.searchChunks(body.text, 5, body.subjectId),
             5_000,
             'RAG'
           );
@@ -219,13 +222,16 @@ export async function questionRoutes(app: FastifyInstance) {
   );
 
   // GET /api/v1/conversations — list user's conversations
-  app.get<{ Querystring: { q?: string; folderId?: string } }>(
+  app.get<{ Querystring: { q?: string; folderId?: string; subjectId?: string } }>(
     '/api/v1/conversations',
     { preHandler: authMiddleware },
     async (request, reply) => {
       if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
       const conditions = [eq(conversations.userId, request.user.userId)];
+      const subjectId = request.query.subjectId ?? DEFAULT_SUBJECT_ID;
+      getSubjectConfig(subjectId);
+      conditions.push(eq(conversations.subject, subjectId));
       const query = request.query.q?.trim();
       if (query) conditions.push(ilike(conversations.title, `%${query}%`));
       if (request.query.folderId === 'unfiled') conditions.push(isNull(conversations.folderId));
@@ -359,7 +365,7 @@ export async function questionRoutes(app: FastifyInstance) {
 
   // ── Knowledge search endpoints ─────────────────────────────────────────────
 
-  app.get<{ Querystring: { q: string; limit?: string } }>(
+  app.get<{ Querystring: { q: string; limit?: string; subjectId?: string } }>(
     '/api/v1/knowledge/search',
     { preHandler: authMiddleware },
     async (request, reply) => {
@@ -368,7 +374,8 @@ export async function questionRoutes(app: FastifyInstance) {
         const limit = Math.min(parseInt(request.query.limit || '10'), 20);
         if (!query) return reply.status(400).send({ error: 'Query parameter is required' });
 
-        const chunks = await KnowledgeService.searchChunks(query, limit);
+        const subjectId = request.query.subjectId ?? DEFAULT_SUBJECT_ID;
+        const chunks = await KnowledgeService.searchChunks(query, limit, subjectId);
         return reply.status(200).send({
           results: chunks.map((chunk) => ({
             id: chunk.id,

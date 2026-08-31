@@ -87,6 +87,7 @@ export class ContentAggregatorService {
       if (chunks.length > 0) {
         await db.insert(knowledgeChunks).values(chunks.map((chunk) => ({
           sourceType: 'verified_web',
+          subjectId: 'physics',
           sourceId: item.url,
           chunkText: chunk.text,
           metadata: {

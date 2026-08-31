@@ -206,8 +206,13 @@ const BASE_PHYSICS_PROMPT = `אתה פיזיקיו — מורה פרטי לפי�
   "socraticQuestion": "שאלה אחת שמעודדת חשיבה עמוקה ומובילה לתובנה"
 }`;
 
-export function buildSystemPrompt(mode?: TutorMode): string {
-  const base = process.env.TUTOR_PROMPT_PHYSICS || BASE_PHYSICS_PROMPT;
+export const DEFAULT_SUBJECT_ID = 'physics';
+
+export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_SUBJECT_ID): string {
+  const subject = getSubjectConfig(subjectId);
+  const base = subject.id === 'physics'
+    ? process.env.TUTOR_PROMPT_PHYSICS || BASE_PHYSICS_PROMPT
+    : subject.systemPrompt;
   const modeKey: TutorMode = mode ?? 'step_by_step';
   return MODE_PROMPTS[modeKey] + '\n\n' + base;
 }
@@ -219,7 +224,7 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     id: 'physics',
     name: 'Physics',
     nameHe: 'פיזיקה',
-    systemPrompt: buildSystemPrompt(),
+    systemPrompt: BASE_PHYSICS_PROMPT,
     topics: Object.keys(PHYSICS_TOPIC_TAXONOMY),
   },
 };
@@ -228,4 +233,8 @@ export function getSubjectConfig(subjectId: string): SubjectConfig {
   const config = SUBJECTS[subjectId];
   if (!config) throw new Error(`Unknown subject: ${subjectId}. Supported: ${Object.keys(SUBJECTS).join(', ')}`);
   return config;
+}
+
+export function getSubjectTopics(subjectId: string): string[] {
+  return getSubjectConfig(subjectId).topics;
 }

@@ -1,5 +1,6 @@
 import { db, uploadedFiles, knowledgeChunks, type UploadedFile } from '@/db';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
 import { v4 as uuidv4 } from 'uuid';
 
 const MAX_FILE_SIZE_MB = 50;
@@ -35,12 +36,15 @@ export class UploadService {
     fileName: string,
     mimeType: string,
     fileSizeBytes: number,
-    storageUrl: string
+    storageUrl: string,
+    subjectId: string = DEFAULT_SUBJECT_ID
   ) {
+    getSubjectConfig(subjectId);
     const [uploaded] = await db
       .insert(uploadedFiles)
       .values({
         userId,
+        subjectId,
         fileName,
         mimeType,
         fileSizeBytes,
@@ -92,9 +96,10 @@ export class UploadService {
   /**
    * List user's uploads
    */
-  static async listUserUploads(userId: string, limit: number = 20) {
+  static async listUserUploads(userId: string, limit: number = 20, subjectId: string = DEFAULT_SUBJECT_ID) {
+    getSubjectConfig(subjectId);
     const uploads = await db.query.uploadedFiles.findMany({
-      where: eq(uploadedFiles.userId, userId),
+      where: and(eq(uploadedFiles.userId, userId), eq(uploadedFiles.subjectId, subjectId)),
       orderBy: [desc(uploadedFiles.createdAt)],
       limit,
     });
@@ -116,6 +121,7 @@ export class UploadService {
   private static formatUploadResponse(upload: UploadedFile) {
     return {
       id: upload.id,
+      subjectId: upload.subjectId,
       fileName: upload.fileName,
       fileSizeBytes: upload.fileSizeBytes,
       mimeType: upload.mimeType,

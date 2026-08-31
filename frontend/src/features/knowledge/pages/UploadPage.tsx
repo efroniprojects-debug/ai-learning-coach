@@ -3,6 +3,7 @@ import { UploadForm } from '../components/UploadForm';
 import { UploadList } from '../components/UploadList';
 import { DriveFilesPanel } from '../components/DriveFilesPanel';
 import type { Upload } from '../types';
+import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
@@ -32,6 +33,7 @@ export function UploadPage() {
           mimeType: file.type,
           fileSizeBytes: file.size,
           storageUrl: mockUrl,
+          subjectId: DEFAULT_SUBJECT_ID,
         }),
       });
 
@@ -63,7 +65,7 @@ export function UploadPage() {
       }
 
       // Refresh uploads list
-      const listResponse = await fetch(`${API_BASE}/api/v1/uploads`, {
+      const listResponse = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${DEFAULT_SUBJECT_ID}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },

@@ -244,6 +244,7 @@ export class DriveService {
         if (chunks.length > 0) {
           await db.insert(knowledgeChunks).values(chunks.map((chunk) => ({
             sourceType: 'google_drive',
+            subjectId: 'physics',
             sourceId: file.id,
             chunkText: chunk.text,
             metadata: {

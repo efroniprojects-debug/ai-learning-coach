@@ -14,16 +14,17 @@ export interface PracticeAttemptResult {
 }
 
 export const practiceApi = {
-  selectProblem: async () => {
-    const { data } = await apiClient.get('/api/v1/practice/select-problem');
+  selectProblem: async (subjectId: string) => {
+    const { data } = await apiClient.get('/api/v1/practice/select-problem', { params: { subjectId } });
     return data as PracticeProblem;
   },
 
-  submitAttempt: async (conceptId: string, isCorrect: boolean, timeSpentSeconds: number) => {
+  submitAttempt: async (conceptId: string, isCorrect: boolean, timeSpentSeconds: number, subjectId: string) => {
     const { data } = await apiClient.post('/api/v1/practice/submit-attempt', {
       conceptId,
       isCorrect,
       timeSpentSeconds,
+      subjectId,
     });
     return data as PracticeAttemptResult;
   },

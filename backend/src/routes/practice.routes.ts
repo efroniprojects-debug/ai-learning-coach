@@ -4,12 +4,15 @@ import { authMiddleware } from '@/middleware/auth.middleware';
 import { PracticeService } from '@/services/practice.service';
 
 const submitAttemptSchema = z.object({
+  subjectId: z.string().optional().default('physics'),
   conceptId: z.string().min(1),
   isCorrect: z.boolean(),
   timeSpentSeconds: z.number().min(0),
 });
 
 export async function practiceRoutes(app: FastifyInstance) {
+  const getSubjectId = (request: FastifyRequest): string =>
+    (request.query as { subjectId?: string }).subjectId ?? 'physics';
   // GET /api/v1/practice/next-recommendation
   app.get(
     '/api/v1/practice/next-recommendation',
@@ -18,7 +21,7 @@ export async function practiceRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const recommendation = await PracticeService.getRecommendation(request.user.userId);
+        const recommendation = await PracticeService.getRecommendation(request.user.userId, getSubjectId(request));
         reply.status(200).send(recommendation);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to get recommendation';
@@ -35,7 +38,7 @@ export async function practiceRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const problem = await PracticeService.selectNextProblem(request.user.userId);
+        const problem = await PracticeService.selectNextProblem(request.user.userId, getSubjectId(request));
         reply.status(200).send(problem);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to select problem';
@@ -57,7 +60,8 @@ export async function practiceRoutes(app: FastifyInstance) {
           request.user.userId,
           body.conceptId,
           body.isCorrect,
-          body.timeSpentSeconds
+          body.timeSpentSeconds,
+          body.subjectId
         );
 
         reply.status(200).send(result);
@@ -79,7 +83,7 @@ export async function practiceRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const history = await PracticeService.getPracticeHistory(request.user.userId);
+        const history = await PracticeService.getPracticeHistory(request.user.userId, 20, getSubjectId(request));
         reply.status(200).send({ attempts: history });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to get history';
@@ -96,7 +100,7 @@ export async function practiceRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-        const overview = await PracticeService.getMasteryOverview(request.user.userId);
+        const overview = await PracticeService.getMasteryOverview(request.user.userId, getSubjectId(request));
         reply.status(200).send(overview);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to get mastery overview';

@@ -4,6 +4,10 @@ import { db, progressSnapshots, skillMastery, practiceAttempts } from '@/db';
 import { eq, desc, and, gte } from 'drizzle-orm';
 import { PHYSICS_TOPIC_TAXONOMY } from '@/config/subjects';
 
+function getProgressSubjectId(request: FastifyRequest): string {
+  return (request.query as { subjectId?: string }).subjectId ?? 'physics';
+}
+
 export async function progressRoutes(app: FastifyInstance) {
   app.get(
     '/api/v1/progress/gaps',
@@ -11,8 +15,9 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
         const mastery = await db.query.skillMastery.findMany({
-          where: eq(skillMastery.userId, request.user.userId),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
         });
         const bySubtopic = new Map(mastery.map((item) => [item.conceptId, item]));
         const topics = Object.entries(PHYSICS_TOPIC_TAXONOMY).map(([topic, data]) => {
@@ -45,6 +50,7 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -53,13 +59,14 @@ export async function progressRoutes(app: FastifyInstance) {
         const snapshot = await db.query.progressSnapshots.findFirst({
           where: and(
             eq(progressSnapshots.userId, request.user.userId),
+            eq(progressSnapshots.subjectId, subjectId),
             eq(progressSnapshots.date, today)
           ),
         });
 
         // Get mastery distribution
         const allMastery = await db.query.skillMastery.findMany({
-          where: eq(skillMastery.userId, request.user.userId),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
         });
 
         const distribution = {
@@ -101,6 +108,7 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
 
         // Get last 30 days
         const thirtyDaysAgo = new Date();
@@ -109,6 +117,7 @@ export async function progressRoutes(app: FastifyInstance) {
         const history = await db.query.progressSnapshots.findMany({
           where: and(
             eq(progressSnapshots.userId, request.user.userId),
+            eq(progressSnapshots.subjectId, subjectId),
             gte(progressSnapshots.date, thirtyDaysAgo)
           ),
           orderBy: [desc(progressSnapshots.date)],
@@ -137,9 +146,10 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
 
         const allMastery = await db.query.skillMastery.findMany({
-          where: eq(skillMastery.userId, request.user.userId),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
           orderBy: [desc(skillMastery.eloRating)],
         });
 
@@ -168,9 +178,10 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
 
         const weakMastery = await db.query.skillMastery.findMany({
-          where: eq(skillMastery.userId, request.user.userId),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
           orderBy: [skillMastery.eloRating],
           limit: 5,
         });
@@ -196,10 +207,11 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const subjectId = getProgressSubjectId(request);
 
         // Get all-time stats
         const allAttempts = await db.query.practiceAttempts.findMany({
-          where: eq(practiceAttempts.userId, request.user.userId),
+          where: and(eq(practiceAttempts.userId, request.user.userId), eq(practiceAttempts.subjectId, subjectId)),
         });
 
         const totalAttempts = allAttempts.length;

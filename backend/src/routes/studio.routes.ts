@@ -14,6 +14,7 @@ const sourceSchema = z.object({
 });
 
 const generateSchema = z.object({
+  subjectId: z.string().optional().default('physics'),
   task: z.enum(['summary', 'practice']),
   sources: z.array(sourceSchema).min(1).max(10),
 });
@@ -22,6 +23,7 @@ export async function studioRoutes(app: FastifyInstance) {
   const loadMaterials = async (
     sources: z.infer<typeof sourceSchema>[],
     userId: string,
+    subjectId: string,
     onProgress?: (completed: number, total: number, name: string) => void,
   ): Promise<string[]> => {
     const materials: string[] = [];
@@ -33,7 +35,11 @@ export async function studioRoutes(app: FastifyInstance) {
         } else {
           const [upload] = await db.select({ content: uploadedFiles.contentExtracted })
             .from(uploadedFiles)
-            .where(and(eq(uploadedFiles.id, source.id), eq(uploadedFiles.userId, userId)))
+            .where(and(
+              eq(uploadedFiles.id, source.id),
+              eq(uploadedFiles.userId, userId),
+              eq(uploadedFiles.subjectId, subjectId)
+            ))
             .limit(1);
           text = upload?.content ?? '';
         }
@@ -55,7 +61,7 @@ export async function studioRoutes(app: FastifyInstance) {
     const parsed = generateSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'יש לבחור לפחות מקור לימוד אחד' });
 
-    const materials = await loadMaterials(parsed.data.sources, request.user.userId);
+    const materials = await loadMaterials(parsed.data.sources, request.user.userId, parsed.data.subjectId);
     if (materials.length === 0) return reply.status(400).send({ error: 'לא ניתן היה לקרוא טקסט מהמקורות שנבחרו' });
 
     const apiKey = process.env.DEMO_GEMINI_API_KEY;
@@ -101,7 +107,7 @@ export async function studioRoutes(app: FastifyInstance) {
     reply.raw.on('close', () => { clientDisconnected = true; controller.abort(); });
     try {
       sendEvent({ type: 'status', stage: 'sources_started' });
-      const materials = await loadMaterials(parsed.data.sources, request.user.userId, (completed, total, name) => {
+      const materials = await loadMaterials(parsed.data.sources, request.user.userId, parsed.data.subjectId, (completed, total, name) => {
         sendEvent({ type: 'status', stage: 'source_completed', completed, total, name });
       });
       if (materials.length === 0) throw new Error('לא ניתן היה לקרוא טקסט מהמקורות שנבחרו');

@@ -1,5 +1,6 @@
 import { db, skillMastery, practiceAttempts, progressSnapshots } from '@/db';
 import { eq, and, desc } from 'drizzle-orm';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
 
 /**
  * Practice Service
@@ -21,10 +22,12 @@ export class PracticeService {
   /**
    * Get or create user's mastery record for a concept
    */
-  static async getOrCreateMastery(userId: string, conceptId: string) {
+  static async getOrCreateMastery(userId: string, conceptId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
+    getSubjectConfig(subjectId);
     let mastery = await db.query.skillMastery.findFirst({
       where: and(
         eq(skillMastery.userId, userId),
+        eq(skillMastery.subjectId, subjectId),
         eq(skillMastery.conceptId, conceptId)
       ),
     });
@@ -34,6 +37,7 @@ export class PracticeService {
         .insert(skillMastery)
         .values({
           userId,
+          subjectId,
           conceptId,
           eloRating: INITIAL_ELO,
           attemptsCount: 0,
@@ -57,10 +61,11 @@ export class PracticeService {
    * 3. 20% of time: practice stronger areas (maintain)
    * 4. Adapt difficulty based on recent performance
    */
-  static async selectNextProblem(userId: string) {
+  static async selectNextProblem(userId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
+    getSubjectConfig(subjectId);
     // Get user's mastery levels
     const allMastery = await db.query.skillMastery.findMany({
-      where: eq(skillMastery.userId, userId),
+      where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId)),
     });
 
     const weakConcepts = allMastery.filter((m) => (m.eloRating ?? 1000) < 1300);
@@ -103,10 +108,11 @@ export class PracticeService {
     userId: string,
     conceptId: string,
     isCorrect: boolean,
-    timeSpentSeconds: number
+    timeSpentSeconds: number,
+    subjectId: string = DEFAULT_SUBJECT_ID
   ) {
     // Get current mastery
-    const mastery = await this.getOrCreateMastery(userId, conceptId);
+    const mastery = await this.getOrCreateMastery(userId, conceptId, subjectId);
 
     const currentElo = mastery.eloRating ?? 1000;
     const eloChange = this.calculateEloChange(currentElo, isCorrect);
@@ -125,6 +131,7 @@ export class PracticeService {
       .where(
         and(
           eq(skillMastery.userId, userId),
+          eq(skillMastery.subjectId, subjectId),
           eq(skillMastery.conceptId, conceptId)
         )
       )
@@ -132,6 +139,7 @@ export class PracticeService {
 
     await db.insert(practiceAttempts).values({
       userId,
+      subjectId,
       questionId: conceptId,
       isCorrect,
       score: isCorrect ? 100 : Math.max(0, 50 - timeSpentSeconds / 10),
@@ -140,7 +148,7 @@ export class PracticeService {
     });
 
     // Update progress snapshot
-    await this.updateProgressSnapshot(userId);
+    await this.updateProgressSnapshot(userId, subjectId);
 
     return {
       eloChange,
@@ -181,12 +189,12 @@ export class PracticeService {
   /**
    * Update daily progress snapshot
    */
-  private static async updateProgressSnapshot(userId: string) {
+  private static async updateProgressSnapshot(userId: string, subjectId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const allMastery = await db.query.skillMastery.findMany({
-      where: eq(skillMastery.userId, userId),
+      where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId)),
     });
 
     const masteryLevels: Record<string, number | undefined> = {};
@@ -203,6 +211,7 @@ export class PracticeService {
     const todayAttempts = await db.query.practiceAttempts.findMany({
       where: and(
         eq(practiceAttempts.userId, userId),
+        eq(practiceAttempts.subjectId, subjectId),
         eq(practiceAttempts.createdAt, today)
       ),
     });
@@ -214,6 +223,7 @@ export class PracticeService {
     const existing = await db.query.progressSnapshots.findFirst({
       where: and(
         eq(progressSnapshots.userId, userId),
+        eq(progressSnapshots.subjectId, subjectId),
         eq(progressSnapshots.date, today)
       ),
     });
@@ -232,6 +242,7 @@ export class PracticeService {
     } else {
       await db.insert(progressSnapshots).values({
         userId,
+        subjectId,
         date: today,
         masteryLevels,
         attemptsToday: todayAttempts.length,
@@ -245,9 +256,10 @@ export class PracticeService {
   /**
    * Get user's practice history
    */
-  static async getPracticeHistory(userId: string, limit: number = 20) {
+  static async getPracticeHistory(userId: string, limit: number = 20, subjectId: string = DEFAULT_SUBJECT_ID) {
+    getSubjectConfig(subjectId);
     const attempts = await db.query.practiceAttempts.findMany({
-      where: eq(practiceAttempts.userId, userId),
+      where: and(eq(practiceAttempts.userId, userId), eq(practiceAttempts.subjectId, subjectId)),
       orderBy: [desc(practiceAttempts.createdAt)],
       limit,
     });
@@ -258,9 +270,10 @@ export class PracticeService {
   /**
    * Get user's mastery overview
    */
-  static async getMasteryOverview(userId: string) {
+  static async getMasteryOverview(userId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
+    getSubjectConfig(subjectId);
     const allMastery = await db.query.skillMastery.findMany({
-      where: eq(skillMastery.userId, userId),
+      where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId)),
     });
 
     const overview = {
@@ -283,8 +296,8 @@ export class PracticeService {
   /**
    * Get next recommendation
    */
-  static async getRecommendation(userId: string) {
-    const mastery = await this.getMasteryOverview(userId);
+  static async getRecommendation(userId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
+    const mastery = await this.getMasteryOverview(userId, subjectId);
 
     if (mastery.masteryList.length === 0) {
       return {

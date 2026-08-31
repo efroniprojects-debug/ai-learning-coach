@@ -11,6 +11,7 @@ import type {
   ProgressStats,
 } from '@/services/progress.api';
 import { GapRadar } from '@/features/progress/components/GapRadar';
+import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
 
 interface GapData {
   gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
@@ -37,11 +38,11 @@ export function ProgressDashboard() {
       setError(null);
 
       const [overviewData, historyData, masteryData, statsData, gapsData] = await Promise.all([
-        progressApi.getOverview(),
-        progressApi.getHistory(),
-        progressApi.getMasteryLevels(),
-        progressApi.getStats(),
-        progressApi.getGaps(),
+        progressApi.getOverview(DEFAULT_SUBJECT_ID),
+        progressApi.getHistory(DEFAULT_SUBJECT_ID),
+        progressApi.getMasteryLevels(DEFAULT_SUBJECT_ID),
+        progressApi.getStats(DEFAULT_SUBJECT_ID),
+        progressApi.getGaps(DEFAULT_SUBJECT_ID),
       ]);
 
       setOverview(overviewData);

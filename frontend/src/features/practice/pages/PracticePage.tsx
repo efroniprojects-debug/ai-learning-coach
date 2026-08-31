@@ -3,6 +3,7 @@ import { ProblemDisplay } from '@/features/practice/components/ProblemDisplay';
 import { MasteryFeedback } from '@/features/practice/components/MasteryFeedback';
 import { AnswerForm } from '@/features/practice/components/AnswerForm';
 import { practiceApi } from '@/services/practice.api';
+import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
 import type { PracticeProblem } from '@/services/practice.api';
 
 interface PracticeFeedback {
@@ -40,7 +41,7 @@ export function PracticePage() {
       setFeedback(null);
       setTimeSpent(0);
 
-      const problem = await practiceApi.selectProblem();
+      const problem = await practiceApi.selectProblem(DEFAULT_SUBJECT_ID);
       setCurrentProblem(problem);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'טעינת התרגיל נכשלה');
@@ -60,7 +61,8 @@ export function PracticePage() {
       const result = await practiceApi.submitAttempt(
         currentProblem.conceptId,
         isCorrect,
-        timeSpent
+        timeSpent,
+        DEFAULT_SUBJECT_ID
       );
 
       setFeedback({

@@ -1,5 +1,6 @@
 import { db, knowledgeChunks } from '@/db';
-import { desc, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
 import type { KnowledgeChunk } from '@/ai/types';
 
 // Mock knowledge chunks (in production, these would be in vector DB)
@@ -61,7 +62,12 @@ export class KnowledgeService {
    * Search for relevant knowledge chunks (semantic search)
    * In production, this would query pgvector DB
    */
-  static async searchChunks(query: string, topK: number = 5): Promise<KnowledgeChunk[]> {
+  static async searchChunks(
+    query: string,
+    topK: number = 5,
+    subjectId: string = DEFAULT_SUBJECT_ID
+  ): Promise<KnowledgeChunk[]> {
+    getSubjectConfig(subjectId);
     const limit = Math.min(Math.max(topK, 1), 3);
     const keywords = query.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
     const physicsKeywords = keywords.filter((word) =>
@@ -81,7 +87,7 @@ export class KnowledgeService {
         const rows = await db
           .select()
           .from(knowledgeChunks)
-          .where(or(...conditions))
+          .where(and(eq(knowledgeChunks.subjectId, subjectId), or(...conditions)))
           .orderBy(desc(knowledgeChunks.createdAt))
           .limit(limit);
 
@@ -101,6 +107,9 @@ export class KnowledgeService {
         // DB/RAG is optional; the built-in physics references remain available.
       }
     }
+
+    // Built-in fallback references currently exist only for Physics.
+    if (subjectId !== 'physics') return [];
 
     const scored = MOCK_CHUNKS.map((chunk) => {
       let score = 0;

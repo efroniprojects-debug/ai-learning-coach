@@ -8,6 +8,7 @@ import { EmbeddingService } from '@/services/embedding.service';
 import { db, knowledgeChunks } from '@/db';
 
 const uploadFileSchema = z.object({
+  subjectId: z.string().optional().default('physics'),
   fileName: z.string().min(1, 'File name is required'),
   mimeType: z.string().min(1, 'MIME type is required'),
   fileSizeBytes: z.number().min(1, 'File size is required'),
@@ -15,6 +16,7 @@ const uploadFileSchema = z.object({
 });
 
 interface UploadFileBody {
+  subjectId?: string;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
@@ -46,7 +48,8 @@ export async function uploadRoutes(app: FastifyInstance) {
           body.fileName,
           body.mimeType,
           body.fileSizeBytes,
-          body.storageUrl
+          body.storageUrl,
+          body.subjectId
         );
 
         // TODO: Enqueue OCR job (async processing)
@@ -75,7 +78,8 @@ export async function uploadRoutes(app: FastifyInstance) {
           return reply.status(401).send({ error: 'Unauthorized' });
         }
 
-        const uploads = await UploadService.listUserUploads(request.user.userId);
+        const subjectId = (request.query as { subjectId?: string }).subjectId ?? 'physics';
+        const uploads = await UploadService.listUserUploads(request.user.userId, 20, subjectId);
         reply.status(200).send({ uploads });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to list uploads';
@@ -134,6 +138,7 @@ export async function uploadRoutes(app: FastifyInstance) {
         }
 
         const uploadId = request.params.uploadId;
+        const upload = await UploadService.getUploadById(uploadId);
 
         // Simulate OCR pipeline
         await UploadService.updateProcessingStatus(uploadId, 'processing');
@@ -165,6 +170,7 @@ export async function uploadRoutes(app: FastifyInstance) {
 
           await db.insert(knowledgeChunks).values({
             sourceType: 'custom',
+            subjectId: upload.subjectId,
             sourceId: uploadId,
             sourceDocumentId: uploadId as any,
             chunkText: chunk.text,
