@@ -1,6 +1,6 @@
 import { db, skillMastery, practiceAttempts, progressSnapshots } from '@/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { DEFAULT_SUBJECT_ID, getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
 
 /**
  * Practice Service
@@ -64,9 +64,10 @@ export class PracticeService {
   static async selectNextProblem(userId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
     getSubjectConfig(subjectId);
     // Get user's mastery levels
-    let allMastery = await db.query.skillMastery.findMany({
+    const configuredConcepts = new Set(getSubjectConcepts(subjectId));
+    let allMastery = (await db.query.skillMastery.findMany({
       where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId)),
-    });
+    })).filter((mastery) => configuredConcepts.has(mastery.conceptId));
 
     // A new subject starts with its first configured concept so practice is
     // immediately available without mixing mastery data from another subject.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSystemPrompt, DEFAULT_SUBJECT_ID, getSubjectConfig, getSubjectTaxonomy } from './subjects';
+import { buildSystemPrompt, DEFAULT_SUBJECT_ID, getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy } from './subjects';
 
 describe('subject registry', () => {
   it('keeps existing data and prompts on Physics by default', () => {
@@ -17,5 +17,7 @@ describe('subject registry', () => {
     expect(getSubjectConfig('math').nameHe).toBe('מתמטיקה');
     expect(buildSystemPrompt('step_by_step', 'math')).toContain('מורה פרטי למתמטיקה');
     expect(getSubjectTaxonomy('math')).toHaveProperty('אלגברה');
+    expect(getSubjectConcepts('math')).toContain('משוואות ואי־שוויונות');
+    expect(getSubjectConcepts('math')).not.toContain('Force');
   });
 });

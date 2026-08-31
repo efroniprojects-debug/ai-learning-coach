@@ -293,6 +293,10 @@ export function getSubjectTaxonomy(subjectId: string): Record<string, TopicData>
   return subjectId === 'math' ? MATH_TOPIC_TAXONOMY : PHYSICS_TOPIC_TAXONOMY;
 }
 
+export function getSubjectConcepts(subjectId: string): string[] {
+  return Object.values(getSubjectTaxonomy(subjectId)).flatMap((topic) => topic.subtopics);
+}
+
 export function getSubjectConfig(subjectId: string): SubjectConfig {
   const config = SUBJECTS[subjectId];
   if (!config) throw new Error(`Unknown subject: ${subjectId}. Supported: ${Object.keys(SUBJECTS).join(', ')}`);
