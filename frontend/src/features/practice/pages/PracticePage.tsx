@@ -3,7 +3,8 @@ import { ProblemDisplay } from '@/features/practice/components/ProblemDisplay';
 import { MasteryFeedback } from '@/features/practice/components/MasteryFeedback';
 import { AnswerForm } from '@/features/practice/components/AnswerForm';
 import { practiceApi } from '@/services/practice.api';
-import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
+import { SubjectSelector } from '@/features/question/components/SubjectSelector';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 import type { PracticeProblem } from '@/services/practice.api';
 
 interface PracticeFeedback {
@@ -16,6 +17,7 @@ interface PracticeFeedback {
 }
 
 export function PracticePage() {
+  const { subjectId, subject, setSubjectId } = useSelectedSubject();
   const [currentProblem, setCurrentProblem] = useState<PracticeProblem | null>(null);
   const [feedback, setFeedback] = useState<PracticeFeedback | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,8 +26,8 @@ export function PracticePage() {
   const [timeSpent, setTimeSpent] = useState(0);
 
   useEffect(() => {
-    loadNextProblem();
-  }, []);
+    void loadNextProblem();
+  }, [subjectId]);
 
   useEffect(() => {
     if (!feedback) {
@@ -41,7 +43,7 @@ export function PracticePage() {
       setFeedback(null);
       setTimeSpent(0);
 
-      const problem = await practiceApi.selectProblem(DEFAULT_SUBJECT_ID);
+      const problem = await practiceApi.selectProblem(subjectId);
       setCurrentProblem(problem);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'טעינת התרגיל נכשלה');
@@ -62,7 +64,7 @@ export function PracticePage() {
         currentProblem.conceptId,
         isCorrect,
         timeSpent,
-        DEFAULT_SUBJECT_ID
+        subjectId
       );
 
       setFeedback({
@@ -94,6 +96,9 @@ export function PracticePage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4" dir="rtl">
       <div className="max-w-3xl mx-auto">
+        <div className="mb-6">
+          <SubjectSelector value={subjectId} disabled={loading || submitting} onChange={setSubjectId} />
+        </div>
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
@@ -103,7 +108,7 @@ export function PracticePage() {
         {!feedback && (
           <>
             <div className="mb-6 flex justify-between items-center">
-              <h1 className="text-3xl font-bold">תרגול מותאם אישית</h1>
+              <h1 className="text-3xl font-bold">תרגול מותאם אישית — {subject.nameHe}</h1>
               <div className="text-sm text-gray-600">
                 זמן: {Math.floor(timeSpent / 60)}:{String(timeSpent % 60).padStart(2, '0')}
               </div>
@@ -111,7 +116,7 @@ export function PracticePage() {
 
             {currentProblem && (
               <>
-                <ProblemDisplay problem={currentProblem} />
+                <ProblemDisplay problem={currentProblem} subjectId={subjectId} />
                 <AnswerForm
                   onSubmit={handleSubmit}
                   loading={submitting}

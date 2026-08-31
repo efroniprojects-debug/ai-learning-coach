@@ -220,9 +220,14 @@ async function startServer() {
 
   if (dbAvailable && process.env.GOOGLE_SERVICE_ACCOUNT_JSON && (process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID)) {
     const { DriveService } = await import('./services/drive.service');
-    void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Initial Drive sync failed'));
+    const configuredDriveSubjects = ['physics', 'math'].filter((subjectId) => DriveService.isConfigured(subjectId));
+    for (const subjectId of configuredDriveSubjects) {
+      void DriveService.syncFolder(subjectId).catch((error) => app.log.warn({ error, subjectId }, 'Initial Drive sync failed'));
+    }
     const driveSyncTimer = setInterval(() => {
-      void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Scheduled Drive sync failed'));
+      for (const subjectId of configuredDriveSubjects) {
+        void DriveService.syncFolder(subjectId).catch((error) => app.log.warn({ error, subjectId }, 'Scheduled Drive sync failed'));
+      }
     }, 30 * 60 * 1000);
     driveSyncTimer.unref();
   }

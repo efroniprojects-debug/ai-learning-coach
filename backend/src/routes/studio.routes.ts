@@ -27,11 +27,17 @@ export async function studioRoutes(app: FastifyInstance) {
     onProgress?: (completed: number, total: number, name: string) => void,
   ): Promise<string[]> => {
     const materials: string[] = [];
+    // Resolve the selected subject folder once, then reject Drive IDs from
+    // other subjects before any extraction takes place.
+    const allowedDriveFiles = sources.some((source) => source.kind === 'drive')
+      ? await DriveService.listFiles(subjectId)
+      : [];
     for (const [index, source] of sources.entries()) {
       try {
         let text = '';
         if (source.kind === 'drive') {
-          if (source.mimeType) text = await DriveService.extractText(source.id, source.mimeType);
+          const allowedDriveFile = allowedDriveFiles.find((file) => file.id === source.id);
+          if (source.mimeType && allowedDriveFile) text = await DriveService.extractText(source.id, source.mimeType);
         } else {
           const [upload] = await db.select({ content: uploadedFiles.contentExtracted })
             .from(uploadedFiles)

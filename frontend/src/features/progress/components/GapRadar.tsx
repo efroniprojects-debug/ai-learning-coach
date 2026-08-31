@@ -29,7 +29,7 @@ export function GapRadar({ topics, gaps, hasData }: Props) {
         <div className="py-16 text-center text-gray-500">פתור תרגילים כדי לבנות מפת ידע 🗺️</div>
       ) : (
         <div className="grid lg:grid-cols-2 gap-6 items-center">
-          <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto w-full min-w-[280px] max-w-[320px]" role="img" aria-label="גרף רדאר של השליטה בנושאי הפיזיקה">
+          <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto w-full min-w-[280px] max-w-[320px]" role="img" aria-label="גרף רדאר של השליטה בנושאי המקצוע שנבחר">
             {[20, 40, 60, 80, 100].map((level) => (
               <polygon key={level} points={topics.map((_, index) => point(index, level).join(',')).join(' ')} fill="none" stroke="#e5e7eb" strokeWidth="1" />
             ))}

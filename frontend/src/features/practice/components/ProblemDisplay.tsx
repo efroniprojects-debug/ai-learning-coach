@@ -6,6 +6,14 @@ const CONCEPT_NAMES: Record<string, string> = {
   Momentum: 'תנע', Gravity: 'כבידה', Waves: 'גלים', Electricity: 'חשמל',
 };
 
+const MATH_CONCEPT_NAMES: Record<string, string> = {
+  'משוואות ואי־שוויונות': 'משוואות ואי־שוויונות',
+  'פונקציה קווית': 'פונקציה קווית',
+  'גאומטריה במישור': 'גאומטריה במישור',
+  'נגזרות': 'נגזרות',
+  'הסתברות': 'הסתברות',
+};
+
 function practiceQuestion(concept: string, difficulty: number): string {
   const name = CONCEPT_NAMES[concept] ?? concept;
   if (concept === 'Force') {
@@ -16,12 +24,20 @@ function practiceQuestion(concept: string, difficulty: number): string {
   return `פתור תרגיל ברמת קושי ${difficulty} בנושא ${name}. כתוב מה ידוע, באיזו נוסחה בחרת, את שלבי החישוב ואת התשובה עם יחידות.`;
 }
 
-export function ProblemDisplay({ problem }: { problem: PracticeProblem }) {
+function mathPracticeQuestion(concept: string, difficulty: number): string {
+  const name = MATH_CONCEPT_NAMES[concept] ?? concept;
+  return `פתור תרגיל ברמת קושי ${difficulty} בנושא ${name}. הצג את הנתונים, את דרך הפתרון, את החישוב ובדיקת תשובה.`;
+}
+
+export function ProblemDisplay({ problem, subjectId }: { problem: PracticeProblem; subjectId: string }) {
+  const conceptName = subjectId === 'math'
+    ? MATH_CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId
+    : CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId;
   return (
     <div className="bg-white rounded-lg shadow p-8 mb-6" dir="rtl">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold mb-2">נושא: {CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId}</h2>
+          <h2 className="text-2xl font-bold mb-2">נושא: {conceptName}</h2>
           <div className="flex items-center gap-4">
             <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
               רמת קושי: {problem.difficulty}/5
@@ -36,7 +52,9 @@ export function ProblemDisplay({ problem }: { problem: PracticeProblem }) {
       <div className="bg-gray-50 p-6 rounded border border-gray-200 mb-6">
         <h3 className="font-semibold text-lg mb-4">שאלה:</h3>
         <p className="text-gray-800 leading-relaxed">
-          {practiceQuestion(problem.conceptId, problem.difficulty)}
+          {subjectId === 'math'
+            ? mathPracticeQuestion(problem.conceptId, problem.difficulty)
+            : practiceQuestion(problem.conceptId, problem.difficulty)}
         </p>
       </div>
 

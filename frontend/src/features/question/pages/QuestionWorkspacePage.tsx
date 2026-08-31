@@ -59,7 +59,9 @@ const STREAM_STAGE_MESSAGES: Record<string, string> = {
 export function QuestionWorkspacePage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedSubject = searchParams.get('subject') ?? DEFAULT_SUBJECT_ID;
+  const requestedSubject = searchParams.get('subject')
+    ?? localStorage.getItem('smarterai-subject')
+    ?? DEFAULT_SUBJECT_ID;
   const [subjectId, setSubjectId] = useState(
     SUBJECTS[requestedSubject] ? requestedSubject : DEFAULT_SUBJECT_ID
   );
@@ -221,6 +223,7 @@ export function QuestionWorkspacePage() {
   const handleSubjectChange = (nextSubjectId: string) => {
     if (nextSubjectId === subjectId || isStreaming || !SUBJECTS[nextSubjectId]) return;
     setSubjectId(nextSubjectId);
+    localStorage.setItem('smarterai-subject', nextSubjectId);
     setSearchParams({ subject: nextSubjectId }, { replace: true });
     setSelectedTopic(null);
     setSelectedSubtopic(null);
@@ -311,7 +314,9 @@ export function QuestionWorkspacePage() {
               mode === 'diagnose'
                 ? 'שתף את הניסיון שלך (גם אם שגוי) — המורה יאבחן את הטעות...'
                 : isFollowUp ? 'שאל שאלת המשך...'
-                : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
+                : subjectId === 'math'
+                  ? 'איך פותרים משוואה ריבועית? איך חוקרים פונקציה? צרף תרגיל...'
+                  : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
             }
           />
 

@@ -11,7 +11,8 @@ import type {
   ProgressStats,
 } from '@/services/progress.api';
 import { GapRadar } from '@/features/progress/components/GapRadar';
-import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
+import { SubjectSelector } from '@/features/question/components/SubjectSelector';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 interface GapData {
   gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
@@ -20,6 +21,7 @@ interface GapData {
 }
 
 export function ProgressDashboard() {
+  const { subjectId, subject, setSubjectId } = useSelectedSubject();
   const [overview, setOverview] = useState<ProgressOverview | null>(null);
   const [history, setHistory] = useState<ProgressSnapshot[]>([]);
   const [mastery, setMastery] = useState<ConceptMastery[]>([]);
@@ -29,8 +31,8 @@ export function ProgressDashboard() {
   const [gapData, setGapData] = useState<GapData>({ gaps: [], topics: [], hasData: false });
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [subjectId]);
 
   const loadData = async () => {
     try {
@@ -38,11 +40,11 @@ export function ProgressDashboard() {
       setError(null);
 
       const [overviewData, historyData, masteryData, statsData, gapsData] = await Promise.all([
-        progressApi.getOverview(DEFAULT_SUBJECT_ID),
-        progressApi.getHistory(DEFAULT_SUBJECT_ID),
-        progressApi.getMasteryLevels(DEFAULT_SUBJECT_ID),
-        progressApi.getStats(DEFAULT_SUBJECT_ID),
-        progressApi.getGaps(DEFAULT_SUBJECT_ID),
+        progressApi.getOverview(subjectId),
+        progressApi.getHistory(subjectId),
+        progressApi.getMasteryLevels(subjectId),
+        progressApi.getStats(subjectId),
+        progressApi.getGaps(subjectId),
       ]);
 
       setOverview(overviewData);
@@ -71,7 +73,8 @@ export function ProgressDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">ההתקדמות שלי</h1>
+        <h1 className="text-4xl font-bold mb-4">ההתקדמות שלי — {subject.nameHe}</h1>
+        <div className="mb-8"><SubjectSelector value={subjectId} disabled={loading} onChange={setSubjectId} /></div>
 
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -88,15 +91,15 @@ export function ProgressDashboard() {
         {overview && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 mb-2">Today's Attempts</p>
+              <p className="text-gray-600 mb-2">ניסיונות היום</p>
               <p className="text-4xl font-bold text-blue-600">{overview.today.attemptCount}</p>
             </div>
             <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 mb-2">Problems Solved</p>
+              <p className="text-gray-600 mb-2">תרגילים שנפתרו</p>
               <p className="text-4xl font-bold text-green-600">{overview.today.problemsSolved}</p>
             </div>
             <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 mb-2">Time Spent</p>
+              <p className="text-gray-600 mb-2">זמן למידה</p>
               <p className="text-4xl font-bold text-purple-600">
                 {Math.round(overview.today.timeSpentSeconds / 60)}m
               </p>

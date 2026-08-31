@@ -16,7 +16,7 @@ interface DriveFilesResponse {
   lastSyncAt: string | null;
 }
 
-export function DriveFilesPanel() {
+export function DriveFilesPanel({ subjectId }: { subjectId: string }) {
   const [data, setData] = useState<DriveFilesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -25,7 +25,7 @@ export function DriveFilesPanel() {
   const loadFiles = useCallback(async () => {
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/drive/files`);
+      const response = await fetch(`${API_BASE}/api/v1/drive/files?subjectId=${encodeURIComponent(subjectId)}`);
       const body = await response.json() as DriveFilesResponse & { error?: string };
       if (!response.ok) throw new Error(body.error ?? 'טעינת הקבצים נכשלה');
       setData(body);
@@ -34,7 +34,7 @@ export function DriveFilesPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [subjectId]);
 
   useEffect(() => { void loadFiles(); }, [loadFiles]);
 
@@ -42,7 +42,7 @@ export function DriveFilesPanel() {
     setSyncing(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/drive/sync`, { method: 'POST' });
+      const response = await fetch(`${API_BASE}/api/v1/drive/sync?subjectId=${encodeURIComponent(subjectId)}`, { method: 'POST' });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? 'הסנכרון נכשל');
       await loadFiles();
