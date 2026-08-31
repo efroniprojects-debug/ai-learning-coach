@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
 type SeasonMap = Record<string, string[]>;
@@ -136,7 +137,7 @@ export function BagruyotSidebar() {
     setOpen(false);
     navigate('/ask', {
       state: {
-        prefilledText: `אני מתרגל ממבחן בגרות ב${subject}, שנת ${year}, מועד ${season}. עזור לי לפתור שאלה מהמבחן.`,
+        prefilledText: `צור לי שאלת תרגול חדשה המבוססת על מבחן בגרות ב${subject}, שנת ${year}, מועד ${season}. הצג תחילה רק את השאלה, והמתן לתשובה שלי לפני הצגת הפתרון.`,
       },
     });
   };
@@ -156,14 +157,17 @@ export function BagruyotSidebar() {
       </button>
 
       {/* Sidebar panel */}
-      {open && (
+      {open && createPortal(
         <div
           className="fixed right-0 top-16 z-[7500] flex h-[calc(100%-4rem)] w-72 max-w-[90vw] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl"
           dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bagruyot-title"
         >
           {/* Header */}
           <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <h2 className="font-bold text-base">📚 בגרויות בעבר</h2>
+            <h2 id="bagruyot-title" className="font-bold text-base">📚 בגרויות בעבר</h2>
             <button
               onClick={() => setOpen(false)}
               className="text-indigo-200 hover:text-white text-lg leading-none"
@@ -241,9 +245,9 @@ export function BagruyotSidebar() {
                             {isYearOpen && (
                               <div className="px-8 py-2 bg-indigo-50 space-y-2">
                                 <div className="flex flex-wrap gap-1.5">{seasons.map((s) => seasonBadge(s))}</div>
-                                {subject === 'פיסיקה' && seasons.map((season) => (
+                                {seasons.map((season) => (
                                   <button key={`ask-${season}`} onClick={() => askFromExam(subject, year, season)} className="w-full text-xs bg-indigo-600 text-white rounded-md px-2 py-2 hover:bg-indigo-700">
-                                    שאל שאלה ממבחן זה · {season}
+                                    צור שאלת תרגול · {season}
                                   </button>
                                 ))}
                               </div>
@@ -261,10 +265,11 @@ export function BagruyotSidebar() {
           {/* Footer note */}
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex-shrink-0">
             <p className="text-xs text-gray-400 text-center">
-              בחר מבחן פיזיקה כדי להתחיל לתרגל
+              בחר מקצוע ומבחן כדי להתחיל לתרגל
             </p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

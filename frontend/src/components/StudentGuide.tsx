@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface GuideItem {
   title: string;
@@ -197,7 +198,7 @@ export function StudentGuide() {
         ❔
       </button>
 
-      {open && (
+      {open && createPortal(
         <div className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="student-guide-title" dir="rtl" className="flex h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:h-[88vh] sm:max-w-4xl sm:rounded-2xl lg:max-w-5xl">
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-6">
@@ -239,7 +240,8 @@ export function StudentGuide() {
               </div>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
