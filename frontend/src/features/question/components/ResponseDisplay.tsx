@@ -1,27 +1,43 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import type { TutorResponse } from '../types';
 
-// KaTeX is loaded via CDN in index.html — window.katex is available after page load
-declare global {
-  interface Window {
-    katex?: {
-      renderToString(expr: string, opts: object): string;
-    };
-  }
+function InlineContent({ text }: { text: string }) {
+  const parts = text.split(/(\$[^$\n]+\$|\*\*[^*]+\*\*)/g).filter(Boolean);
+  return <>{parts.map((part, index) => {
+    if (part.startsWith('$') && part.endsWith('$')) {
+      const expression = part.slice(1, -1).trim();
+      try {
+        return <span key={index} dir="ltr" className="inline-block mx-1" dangerouslySetInnerHTML={{
+          __html: katex.renderToString(expression, { throwOnError: false, output: 'html' }),
+        }} />;
+      } catch {
+        return <span key={index} dir="ltr">{expression}</span>;
+      }
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return <Fragment key={index}>{part.replace(/(?<!\*)\*(?!\*)/g, '')}</Fragment>;
+  })}</>;
 }
 
-function renderMath(el: HTMLElement) {
-  const katex = window.katex;
-  if (!katex) return; // CDN not yet loaded — graceful degradation
-
-  const html = el.innerHTML.replace(/\$([^$\n]+)\$/g, (_, expr: string) => {
-    try {
-      return katex.renderToString(expr.trim(), { throwOnError: false, output: 'html' });
-    } catch {
-      return `$${expr}$`;
-    }
-  });
-  el.innerHTML = html;
+function FormattedText({ text }: { text: string }) {
+  const lines = text.replace(/\\n/g, '\n').split('\n');
+  return (
+    <div className="space-y-2">
+      {lines.map((rawLine, index) => {
+        const line = rawLine.trim();
+        if (!line) return <div key={index} className="h-1" aria-hidden="true" />;
+        const heading = line.match(/^#{1,4}\s+(.+)$/);
+        if (heading) return <h4 key={index} className="font-bold text-gray-900 mt-4"><InlineContent text={heading[1]} /></h4>;
+        const bullet = line.match(/^[-•]\s+(.+)$/);
+        if (bullet) return <div key={index} className="flex gap-2"><span aria-hidden="true">•</span><p><InlineContent text={bullet[1]} /></p></div>;
+        return <p key={index}><InlineContent text={line} /></p>;
+      })}
+    </div>
+  );
 }
 
 type Tab = 'explanation' | 'steps' | 'hints';
@@ -88,11 +104,8 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
         {/* ── Explanation tab ── */}
         {activeTab === 'explanation' && (
           <div className="space-y-4">
-            <div
-              className="text-gray-800 leading-relaxed text-sm"
-              ref={(el) => { if (el) renderMath(el); }}
-            >
-              {response.explanation}
+            <div className="text-gray-800 leading-relaxed text-sm">
+              <FormattedText text={response.explanation} />
             </div>
 
             {/* Socratic question */}
@@ -143,11 +156,8 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
                   </div>
                   <div className="flex-1 pb-4 border-b border-gray-100 last:border-0">
                     <h4 className="font-semibold text-gray-900 text-sm mb-1">{step.title}</h4>
-                    <div
-                      className="text-gray-700 text-sm leading-relaxed"
-                      ref={(el) => { if (el) renderMath(el); }}
-                    >
-                      {step.content}
+                    <div className="text-gray-700 text-sm leading-relaxed">
+                      <FormattedText text={step.content} />
                     </div>
                   </div>
                 </div>

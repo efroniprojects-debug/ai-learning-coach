@@ -84,7 +84,9 @@ export function QuestionWorkspacePage() {
           try { event = JSON.parse(raw); } catch { continue; }
 
           if (event.type === 'delta') {
-            setStreamText((prev) => prev + (event.text as string));
+            // The backend response is structured JSON. Never expose its raw
+            // transport representation while it is still being assembled.
+            setStreamText('מעבד ומסדר את התשובה...');
           } else if (event.type === 'done') {
             const d = event as { conversationId: string; messageId: string; structured: TutorResponse; sources: TutorResponse['sources'] };
             setResponse({ ...d.structured, conversationId: d.conversationId, messageId: d.messageId, sources: d.sources });

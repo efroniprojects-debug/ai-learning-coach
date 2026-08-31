@@ -201,7 +201,13 @@ export class TutorService {
         'Content-Type': 'application/json',
         'X-goog-api-key': apiKey,
       },
-      body: JSON.stringify({ contents }),
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.4,
+        },
+      }),
       signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     });
 
@@ -230,12 +236,6 @@ export class TutorService {
     if (!fullText) {
       const blockReason = geminiData.promptFeedback?.blockReason ?? 'none';
       throw new Error(`Gemini returned empty response (blockReason: ${blockReason})`);
-    }
-
-    // Send text in chunks to simulate streaming
-    const chunkSize = 50;
-    for (let i = 0; i < fullText.length; i += chunkSize) {
-      yield { type: 'delta', text: fullText.slice(i, i + chunkSize) };
     }
 
     const structured = this.parseStructuredResponse(fullText);
@@ -334,23 +334,88 @@ export class TutorService {
   }
 
   private static parseStructuredResponse(rawText: string): TutorStructuredResponse {
-    const cleaned = rawText
-      .replace(/^```json\s*/m, '')
-      .replace(/^```\s*/m, '')
-      .replace(/```\s*$/m, '')
-      .trim();
+    return parseTutorStructuredResponse(rawText);
+  }
+}
 
-    try {
-      const parsed = JSON.parse(cleaned);
-      return TutorStructuredResponseSchema.parse(parsed);
-    } catch {
-      return {
-        explanation: rawText,
-        steps: [{ number: 1, title: 'הסבר', content: rawText }],
-        hints: ['קרא שוב את השאלה בעיון', 'חשוב על מה נדרש', 'נסה לפרק לחלקים קטנים'],
-        misconceptions: [],
-        socraticQuestion: undefined,
-      };
-    }
+function decodeHtmlEntities(text: string): string {
+  const entities: Record<string, string> = {
+    '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
+  };
+  return text.replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => entities[entity] ?? entity);
+}
+
+/** Keep model output display-safe even when it ignores the no-HTML instruction. */
+export function normalizeTutorText(value: string): string {
+  return decodeHtmlEntities(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\u200b|\ufeff/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizeStructuredResponse(value: unknown): TutorStructuredResponse {
+  const parsed = TutorStructuredResponseSchema.parse(value);
+  return {
+    explanation: normalizeTutorText(parsed.explanation),
+    steps: parsed.steps.map((step) => ({
+      number: step.number,
+      title: normalizeTutorText(step.title),
+      content: normalizeTutorText(step.content),
+    })),
+    hints: parsed.hints.map(normalizeTutorText),
+    misconceptions: parsed.misconceptions.map((item) => ({
+      misconception: normalizeTutorText(item.misconception),
+      correction: normalizeTutorText(item.correction),
+    })),
+    socraticQuestion: parsed.socraticQuestion
+      ? normalizeTutorText(parsed.socraticQuestion)
+      : undefined,
+  };
+}
+
+function extractJsonObject(rawText: string): string {
+  const cleaned = rawText
+    .replace(/\u200b|\ufeff/g, '')
+    .replace(/^\s*\\?`\\?`\\?`(?:json)?\s*/i, '')
+    .replace(/\s*\\?`\\?`\\?`\s*$/i, '')
+    .trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  return firstBrace >= 0 && lastBrace > firstBrace
+    ? cleaned.slice(firstBrace, lastBrace + 1)
+    : cleaned;
+}
+
+function extractExplanationFallback(rawText: string): string | null {
+  const match = extractJsonObject(rawText).match(/"explanation"\s*:\s*"((?:\\.|[^"\\])*)"/s);
+  if (!match) return null;
+  try {
+    return normalizeTutorText(JSON.parse(`"${match[1]}"`) as string);
+  } catch {
+    return normalizeTutorText(match[1]);
+  }
+}
+
+export function parseTutorStructuredResponse(rawText: string): TutorStructuredResponse {
+  const jsonText = extractJsonObject(rawText);
+  try {
+    let parsed: unknown = JSON.parse(jsonText);
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    return normalizeStructuredResponse(parsed);
+  } catch {
+    const explanation = extractExplanationFallback(rawText);
+    const safeExplanation = explanation || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+    return {
+      explanation: safeExplanation,
+      steps: [{ number: 1, title: 'הסבר', content: safeExplanation }],
+      hints: ['קרא שוב את השאלה בעיון', 'זהה את הנתונים והנעלם', 'נסה לפרק את הפתרון לשלבים'],
+      misconceptions: [],
+      socraticQuestion: undefined,
+    };
   }
 }
