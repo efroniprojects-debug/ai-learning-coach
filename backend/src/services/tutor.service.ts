@@ -51,7 +51,7 @@ export interface TutorFullResponse {
 
 const MAX_HISTORY_MESSAGES = 6;
 const DB_TIMEOUT_MS = 5_000;
-const GEMINI_TIMEOUT_MS = 30_000;
+const GEMINI_TIMEOUT_MS = 90_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
