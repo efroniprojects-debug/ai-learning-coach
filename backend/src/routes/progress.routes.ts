@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authMiddleware } from '@/middleware/auth.middleware';
 import { db, progressSnapshots, skillMastery, practiceAttempts } from '@/db';
 import { eq, desc, and, gte } from 'drizzle-orm';
-import { getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
+import { getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
 
 function getProgressSubjectId(request: FastifyRequest): string {
   const subjectId = (request.query as { subjectId?: string }).subjectId ?? 'physics';
@@ -18,9 +18,10 @@ export async function progressRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
         const subjectId = getProgressSubjectId(request);
-        const mastery = await db.query.skillMastery.findMany({
+        const configuredConcepts = new Set(getSubjectConcepts(subjectId));
+        const mastery = (await db.query.skillMastery.findMany({
           where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
-        });
+        })).filter((item) => configuredConcepts.has(item.conceptId));
         const bySubtopic = new Map(mastery.map((item) => [item.conceptId, item]));
         const taxonomy = getSubjectTaxonomy(subjectId);
         const topics = Object.entries(taxonomy).map(([topic, data]) => {
