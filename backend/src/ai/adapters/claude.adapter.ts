@@ -20,7 +20,7 @@ export class ClaudeAdapter implements AIAdapter {
         content: msg.content,
       })),
       temperature: options.temperature ?? 0.7,
-    });
+    }, { signal: options.signal });
 
     const content =
       response.content[0].type === 'text' ? response.content[0].text : '';
@@ -46,7 +46,7 @@ export class ClaudeAdapter implements AIAdapter {
         content: msg.content,
       })),
       temperature: options.temperature ?? 0.7,
-    });
+    }, { signal: options.signal });
 
     for await (const event of stream) {
       if (

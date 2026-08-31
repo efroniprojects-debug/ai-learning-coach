@@ -3,13 +3,14 @@ import { UploadForm } from '../components/UploadForm';
 import { UploadList } from '../components/UploadList';
 import { DriveFilesPanel } from '../components/DriveFilesPanel';
 import type { Upload } from '../types';
-import { SubjectSelector } from '@/features/question/components/SubjectSelector';
 import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
+import { LearningContextSummary } from '@/features/subjects/LearningContextSummary';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 export function UploadPage() {
-  const { subjectId, subject, setSubjectId } = useSelectedSubject();
+  const { subjectId, subject, mathStudyUnits } = useSelectedSubject();
+  const studyUnitsQuery = subjectId === 'math' ? `&studyUnits=${mathStudyUnits}` : '';
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export function UploadPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`, {
+        const response = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}${studyUnitsQuery}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
         });
         const data = await response.json() as { uploads?: Upload[]; error?: string };
@@ -33,7 +34,7 @@ export function UploadPage() {
       }
     };
     void loadUploads();
-  }, [subjectId]);
+  }, [mathStudyUnits, studyUnitsQuery, subjectId]);
 
   const handleFileUpload = async (file: File) => {
     setLoading(true);
@@ -43,7 +44,8 @@ export function UploadPage() {
       // TODO: Upload file to storage service
       // For now, mock upload
       // Keep each subject in its own logical storage namespace.
-      const mockUrl = `gs://ai-learning-coach-storage/${subjectId}/${file.name}`;
+      const trackPath = subjectId === 'math' ? `${mathStudyUnits}-units` : 'general';
+      const mockUrl = `gs://ai-learning-coach-storage/${subjectId}/${trackPath}/${file.name}`;
 
       const response = await fetch(`${API_BASE}/api/v1/uploads/file`, {
         method: 'POST',
@@ -57,6 +59,7 @@ export function UploadPage() {
           fileSizeBytes: file.size,
           storageUrl: mockUrl,
           subjectId,
+          studyUnits: subjectId === 'math' ? mathStudyUnits : undefined,
         }),
       });
 
@@ -88,7 +91,7 @@ export function UploadPage() {
       }
 
       // Refresh uploads list
-      const listResponse = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`, {
+      const listResponse = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}${studyUnitsQuery}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
@@ -126,7 +129,7 @@ export function UploadPage() {
       <p className="text-gray-600 mb-8">
         העלה קבצי PDF, תמונות או טקסט. המערכת תחלץ את הטקסט, תפרק לקטעים, וגנרט embeddings לחיפוש סמנטי.
       </p>
-      <div className="mb-6"><SubjectSelector value={subjectId} disabled={loading} onChange={setSubjectId} /></div>
+      <LearningContextSummary />
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded text-red-700">

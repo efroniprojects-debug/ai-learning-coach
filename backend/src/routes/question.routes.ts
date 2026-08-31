@@ -6,7 +6,7 @@ import { KnowledgeService } from '@/services/knowledge.service';
 import { TutorService } from '@/services/tutor.service';
 import { db, conversations, conversationMessages, conversationFolders } from '@/db';
 import { eq, desc, and, asc, ilike, isNull } from 'drizzle-orm';
-import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig, normalizeStudyUnits } from '@/config/subjects';
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 
@@ -15,12 +15,14 @@ const askQuestionBodySchema = z.object({
   imageUrls: z.array(z.string().url()).optional(),
   conversationId: z.string().uuid().optional(),
   subjectId: z.string().optional().default('physics'),
+  studyUnits: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
 });
 
 const streamQuestionBodySchema = z.object({
   text: z.string().min(1, 'Question is required').max(2000),
   conversationId: z.string().uuid().optional(),
   subjectId: z.string().optional().default('physics'),
+  studyUnits: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
   imageData: z.string().optional(), // base64 image for Gemini Vision
   documentData: z.string().optional(),
   documentMimeType: z.enum([
@@ -71,7 +73,8 @@ export async function questionRoutes(app: FastifyInstance) {
 
         const body = askQuestionBodySchema.parse(request.body);
         getSubjectConfig(body.subjectId);
-        const ragContext = await KnowledgeService.searchChunks(body.text, 5, body.subjectId);
+        const studyUnits = normalizeStudyUnits(body.subjectId, body.studyUnits);
+        const ragContext = await KnowledgeService.searchChunks(body.text, 5, body.subjectId, studyUnits);
 
         const result = await TutorService.answerQuestion(
           {
@@ -79,6 +82,7 @@ export async function questionRoutes(app: FastifyInstance) {
             imageUrls: body.imageUrls,
             userId: request.user.userId,
             subjectId: body.subjectId,
+            studyUnits,
             conversationId: body.conversationId,
           },
           ragContext
@@ -156,7 +160,7 @@ export async function questionRoutes(app: FastifyInstance) {
         sendEvent({ type: 'status', stage: 'rag_started' });
         try {
           ragContext = await withTimeout(
-            KnowledgeService.searchChunks(body.text, 5, body.subjectId),
+            KnowledgeService.searchChunks(body.text, 5, body.subjectId, body.studyUnits),
             5_000,
             'RAG'
           );
@@ -176,6 +180,7 @@ export async function questionRoutes(app: FastifyInstance) {
             text: body.text,
             userId: request.user.userId,
             subjectId: body.subjectId,
+            studyUnits: normalizeStudyUnits(body.subjectId, body.studyUnits),
             conversationId: body.conversationId,
             imageData: body.imageData,
             documentData: body.documentData,
@@ -222,7 +227,7 @@ export async function questionRoutes(app: FastifyInstance) {
   );
 
   // GET /api/v1/conversations — list user's conversations
-  app.get<{ Querystring: { q?: string; folderId?: string; subjectId?: string } }>(
+  app.get<{ Querystring: { q?: string; folderId?: string; subjectId?: string; studyUnits?: string } }>(
     '/api/v1/conversations',
     { preHandler: authMiddleware },
     async (request, reply) => {
@@ -232,6 +237,7 @@ export async function questionRoutes(app: FastifyInstance) {
       const subjectId = request.query.subjectId ?? DEFAULT_SUBJECT_ID;
       getSubjectConfig(subjectId);
       conditions.push(eq(conversations.subject, subjectId));
+      conditions.push(eq(conversations.studyUnits, normalizeStudyUnits(subjectId, Number(request.query.studyUnits))));
       const query = request.query.q?.trim();
       if (query) conditions.push(ilike(conversations.title, `%${query}%`));
       if (request.query.folderId === 'unfiled') conditions.push(isNull(conversations.folderId));
@@ -242,6 +248,7 @@ export async function questionRoutes(app: FastifyInstance) {
           id: conversations.id,
           title: conversations.title,
           subject: conversations.subject,
+          studyUnits: conversations.studyUnits,
           folderId: conversations.folderId,
           createdAt: conversations.createdAt,
           updatedAt: conversations.updatedAt,
@@ -365,7 +372,7 @@ export async function questionRoutes(app: FastifyInstance) {
 
   // ── Knowledge search endpoints ─────────────────────────────────────────────
 
-  app.get<{ Querystring: { q: string; limit?: string; subjectId?: string } }>(
+  app.get<{ Querystring: { q: string; limit?: string; subjectId?: string; studyUnits?: string } }>(
     '/api/v1/knowledge/search',
     { preHandler: authMiddleware },
     async (request, reply) => {
@@ -375,7 +382,7 @@ export async function questionRoutes(app: FastifyInstance) {
         if (!query) return reply.status(400).send({ error: 'Query parameter is required' });
 
         const subjectId = request.query.subjectId ?? DEFAULT_SUBJECT_ID;
-        const chunks = await KnowledgeService.searchChunks(query, limit, subjectId);
+        const chunks = await KnowledgeService.searchChunks(query, limit, subjectId, Number(request.query.studyUnits));
         return reply.status(200).send({
           results: chunks.map((chunk) => ({
             id: chunk.id,

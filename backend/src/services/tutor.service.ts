@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { db, conversations, conversationMessages, skillMastery } from '@/db';
 import { eq, asc, and, sql } from 'drizzle-orm';
 import { aiGateway } from '@/ai/gateway';
-import { buildSystemPrompt } from '@/config/subjects';
+import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
 import type { TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
 
@@ -38,6 +38,7 @@ export interface TutorQuestion {
   documentName?: string;
   userId: string;
   subjectId?: string;
+  studyUnits?: number;
   conversationId?: string;
   mode?: TutorMode;
   topic?: string;
@@ -95,7 +96,8 @@ export class TutorService {
     ragContext: KnowledgeChunk[]
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId);
+    const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -104,7 +106,7 @@ export class TutorService {
     let history: import('@/ai/types').AIMessage[] = [];
     try {
       convId = await this.getOrCreateConversation(
-        question.userId, question.text, subjectId, question.conversationId
+        question.userId, question.text, subjectId, studyUnits, question.conversationId
       );
       history = await this.loadHistory(convId);
       const userMessageContent = this.buildUserPrompt(
@@ -155,7 +157,8 @@ export class TutorService {
     ragContext: KnowledgeChunk[]
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId);
+    const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -163,7 +166,7 @@ export class TutorService {
     try {
       const prepared = await withTimeout((async () => {
         const conversationId = await this.getOrCreateConversation(
-          question.userId, question.text, subjectId, question.conversationId
+          question.userId, question.text, subjectId, studyUnits, question.conversationId
         );
         const conversationHistory = await this.loadHistory(conversationId);
         const userMessageContent = this.buildUserPrompt(
@@ -332,7 +335,7 @@ export class TutorService {
   }
 
   private static async getOrCreateConversation(
-    userId: string, questionText: string, subjectId: string, existingConvId?: string
+    userId: string, questionText: string, subjectId: string, studyUnits: number, existingConvId?: string
   ): Promise<string> {
     if (existingConvId) {
       const existing = await db
@@ -346,7 +349,7 @@ export class TutorService {
     const title = questionText.length > 80 ? questionText.substring(0, 77) + '...' : questionText;
     const [conv] = await db
       .insert(conversations)
-      .values({ userId, title, subject: subjectId })
+      .values({ userId, title, subject: subjectId, studyUnits })
       .returning({ id: conversations.id });
 
     return conv.id;
@@ -381,10 +384,12 @@ export class TutorService {
     if (delta === 0) return undefined;
 
     try {
+      const studyUnits = normalizeStudyUnits(question.subjectId ?? 'physics', question.studyUnits);
       const existing = await db.query.skillMastery.findFirst({
         where: and(
           eq(skillMastery.userId, question.userId),
           eq(skillMastery.subjectId, question.subjectId ?? 'physics'),
+          eq(skillMastery.studyUnits, studyUnits),
           eq(skillMastery.conceptId, question.subtopic)
         ),
       });
@@ -395,6 +400,7 @@ export class TutorService {
       await db.insert(skillMastery).values({
         userId: question.userId,
         subjectId: question.subjectId ?? 'physics',
+        studyUnits,
         conceptId: question.subtopic,
         eloRating: nextElo,
         attemptsCount: (existing?.attemptsCount ?? 0) + 1,
@@ -403,7 +409,7 @@ export class TutorService {
         confidenceLevel: confidence,
         updatedAt: new Date(),
       }).onConflictDoUpdate({
-        target: [skillMastery.userId, skillMastery.subjectId, skillMastery.conceptId],
+        target: [skillMastery.userId, skillMastery.subjectId, skillMastery.studyUnits, skillMastery.conceptId],
         set: {
           eloRating: nextElo,
           attemptsCount: sql`${skillMastery.attemptsCount} + 1`,

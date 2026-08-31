@@ -10,6 +10,8 @@ import { PracticePage } from '@/features/practice/pages/PracticePage';
 import { BagruyotSidebar } from '@/components/BagruyotSidebar';
 import { ScientificCalculator } from '@/components/calculator/ScientificCalculator';
 import { StudentGuide } from '@/components/StudentGuide';
+import { MathStudyUnits } from '@/config/subjects';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 const queryClient = new QueryClient();
 const ProgressDashboard = lazy(() => import('@/features/progress/pages/ProgressDashboard').then((module) => ({ default: module.ProgressDashboard })));
@@ -20,6 +22,7 @@ function PageLoader() {
 }
 
 function GlobalHeader({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
+  const { subject, mathStudyUnits } = useSelectedSubject();
   return (
     <header className="fixed inset-x-0 top-0 z-[7400] h-16 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
       <Link to="/dashboard" className="absolute right-3 top-1.5 rounded-lg border border-blue-100 bg-white p-1 shadow dark:border-slate-600 dark:bg-slate-800" aria-label="SmarterAI — דף הבית">
@@ -27,6 +30,13 @@ function GlobalHeader({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onTog
       </Link>
       {/* Keep global utilities together so they remain easy to find on every page. */}
       <div className="absolute right-20 top-2.5 flex items-center gap-2" dir="rtl">
+        <Link
+          to="/dashboard"
+          className={`hidden h-10 items-center rounded-lg border px-3 text-sm font-semibold shadow-sm md:flex ${subject.accent === 'green' ? 'border-green-200 bg-green-50 text-green-800' : 'border-blue-200 bg-blue-50 text-blue-800'}`}
+          aria-label={`הקשר לימודי: ${subject.nameHe}${subject.id === 'math' ? `, ${mathStudyUnits} יחידות לימוד` : ''}. שינוי בדף הבית`}
+        >
+          {subject.icon} {subject.nameHe}{subject.id === 'math' ? ` · ${mathStudyUnits} יח״ל` : ''}
+        </Link>
         <button onClick={onToggleTheme} className="flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50 sm:px-3 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label={theme === 'light' ? 'עבור למצב כהה' : 'עבור למצב בהיר'}>
           <span aria-hidden="true">{theme === 'light' ? '🌙' : '☀️'}</span>
           <span className="ms-1 hidden sm:inline">{theme === 'light' ? 'כהה' : 'בהיר'}</span>
@@ -52,38 +62,49 @@ function SiteFooter() {
 }
 
 function DashboardPage() {
+  const { subjectId, subject, mathStudyUnits, setSubjectId, setMathStudyUnits } = useSelectedSubject();
+  const isMath = subjectId === 'math';
+  const cardClass = isMath
+    ? 'border-green-200 bg-green-50/60 hover:border-green-500 dark:bg-green-950/30'
+    : 'border-blue-200 bg-blue-50/60 hover:border-blue-500 dark:bg-blue-950/30';
+  const modules = [
+    { to: '/ask', icon: subject.icon, title: 'שאל שאלה', description: 'הסבר שלב-אחר-שלב, פתרון מלא, אבחון טעות' },
+    { to: '/practice', icon: '📝', title: 'תרגול', description: 'תרגילים מותאמים אישית עם מעקב ELO' },
+    { to: '/upload', icon: '📤', title: 'העלה חומרים', description: 'PDF, דפי עבודה, מבחני בגרות עבר' },
+    { to: '/progress', icon: '📊', title: 'התקדמות', description: 'מעקב שליטה ואזורים שצריך לחזק' },
+    { to: '/studio', icon: '📚', title: 'Studio', description: 'יצירת סיכומים ושאלות תרגול מחומרי הלימוד שלך', wide: true },
+  ];
+
   return (
     <div className="max-w-4xl mx-auto py-10 px-4" dir="rtl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-1">SmarterAI 🧠</h1>
         <p className="text-gray-500 text-sm">סביבת למידה חכמה לפיזיקה ולמתמטיקה</p>
       </div>
+      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:bg-slate-900" aria-labelledby="learning-context-title">
+        <h2 id="learning-context-title" className="mb-3 text-lg font-bold">מה לומדים עכשיו?</h2>
+        <div className="flex flex-wrap items-center gap-3" role="group" aria-label="בחירת מקצוע">
+          <button type="button" onClick={() => setSubjectId('physics')} aria-pressed={subjectId === 'physics'} className={`border px-5 py-3 font-bold ${subjectId === 'physics' ? 'border-blue-700 bg-blue-600 text-white ring-2 ring-blue-200' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-500'}`}>🔬 פיזיקה</button>
+          <button type="button" onClick={() => setSubjectId('math')} aria-pressed={isMath} className={`border px-5 py-3 font-bold ${isMath ? 'border-green-700 bg-green-600 text-white ring-2 ring-green-200' : 'border-gray-300 bg-white text-gray-700 hover:border-green-500'}`}>📐 מתמטיקה</button>
+          {isMath && (
+            <label className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 font-medium text-green-900">
+              יחידות לימוד
+              <select value={mathStudyUnits} onChange={(event) => setMathStudyUnits(Number(event.target.value) as MathStudyUnits)} className="rounded-md border border-green-300 bg-white px-3 py-1 font-bold" aria-label="מספר יחידות לימוד במתמטיקה">
+                <option value={3}>3</option><option value={4}>4</option><option value={5}>5</option>
+              </select>
+            </label>
+          )}
+        </div>
+        <p className="mt-3 text-sm text-gray-600">כל המודולים ייפתחו עבור {subject.nameHe}{isMath ? ` ברמת ${mathStudyUnits} יח״ל` : ''}.</p>
+      </section>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Link to="/ask" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-400 transition-all block">
-          <div className="text-3xl mb-3">🔬</div>
-          <h2 className="text-lg font-semibold mb-1">שאל שאלה</h2>
-          <p className="text-gray-500 text-sm">הסבר שלב-אחר-שלב, פתרון מלא, אבחון טעות</p>
-        </Link>
-        <Link to="/practice" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-400 transition-all block">
-          <div className="text-3xl mb-3">📝</div>
-          <h2 className="text-lg font-semibold mb-1">תרגול</h2>
-          <p className="text-gray-500 text-sm">תרגילים מותאמים אישית עם מעקב ELO</p>
-        </Link>
-        <Link to="/upload" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-400 transition-all block">
-          <div className="text-3xl mb-3">📤</div>
-          <h2 className="text-lg font-semibold mb-1">העלה חומרים</h2>
-          <p className="text-gray-500 text-sm">PDF, דפי עבודה, מבחני בגרות עבר</p>
-        </Link>
-        <Link to="/progress" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-400 transition-all block">
-          <div className="text-3xl mb-3">📊</div>
-          <h2 className="text-lg font-semibold mb-1">התקדמות</h2>
-          <p className="text-gray-500 text-sm">מעקב שליטה ואזורים שצריך לחזק</p>
-        </Link>
-        <Link to="/studio" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-violet-400 transition-all block sm:col-span-2">
-          <div className="text-3xl mb-3">📚</div>
-          <h2 className="text-lg font-semibold mb-1">Studio</h2>
-          <p className="text-gray-500 text-sm">יצירת סיכומים ושאלות תרגול מחומרי הלימוד שלך</p>
-        </Link>
+        {modules.map((module) => (
+          <Link key={module.to} to={module.to} className={`block rounded-xl border p-6 transition-all hover:shadow-lg ${cardClass} ${module.wide ? 'sm:col-span-2' : ''}`}>
+            <div className="mb-3 text-3xl">{module.icon}</div>
+            <h2 className="mb-1 text-lg font-semibold">{module.title}</h2>
+            <p className="text-sm text-gray-600">{module.description}</p>
+          </Link>
+        ))}
       </div>
     </div>
   );

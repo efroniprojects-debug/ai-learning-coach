@@ -1,13 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
-interface DriveFile {
+export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
   modifiedTime: string | null;
   sizeBytes: number | null;
+}
+
+export function filterDriveFiles(files: DriveFile[], query: string, fileType: 'all' | 'pdf' | 'document'): DriveFile[] {
+  const normalized = query.trim().toLocaleLowerCase('he-IL');
+  return files.filter((file) => {
+    const matchesName = !normalized || file.name.toLocaleLowerCase('he-IL').includes(normalized);
+    const isPdf = file.mimeType === 'application/pdf' || file.name.toLocaleLowerCase('he-IL').endsWith('.pdf');
+    return matchesName && (fileType === 'all' || (fileType === 'pdf' ? isPdf : !isPdf));
+  });
 }
 
 interface DriveFilesResponse {
@@ -21,6 +30,9 @@ export function DriveFilesPanel({ subjectId }: { subjectId: string }) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [fileType, setFileType] = useState<'all' | 'pdf' | 'document'>('all');
+  const visibleFiles = useMemo(() => filterDriveFiles(data?.files ?? [], query, fileType), [data?.files, fileType, query]);
 
   const loadFiles = useCallback(async () => {
     setError(null);
@@ -70,8 +82,14 @@ export function DriveFilesPanel({ subjectId }: { subjectId: string }) {
         </button>
       </div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      <div className="grid gap-2 sm:grid-cols-[1fr_160px]">
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי שם..." aria-label="חיפוש בקובצי Drive" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <select value={fileType} onChange={(event) => setFileType(event.target.value as 'all' | 'pdf' | 'document')} aria-label="סינון לפי סוג קובץ" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+          <option value="all">כל הסוגים</option><option value="pdf">PDF</option><option value="document">מסמכים</option>
+        </select>
+      </div>
       <div className="divide-y rounded-xl border bg-white">
-        {data.files.length === 0 ? <p className="p-5 text-sm text-gray-500">אין קבצים בתיקייה המחוברת.</p> : data.files.map((file) => (
+        {data.files.length === 0 ? <p className="p-5 text-sm text-gray-500">אין קבצים בתיקייה המחוברת.</p> : visibleFiles.length === 0 ? <p className="p-5 text-sm text-gray-500">לא נמצאו קבצים התואמים למסננים.</p> : visibleFiles.map((file) => (
           <div key={file.id} className="flex items-center justify-between gap-4 p-4">
             <div className="min-w-0"><p className="truncate text-sm font-medium">📄 {file.name}</p><p className="text-xs text-gray-500">{file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString('he-IL') : 'ללא תאריך'}</p></div>
             <span className="shrink-0 text-xs text-gray-400">{file.sizeBytes ? `${(file.sizeBytes / 1024 / 1024).toFixed(1)} MB` : 'Google Doc'}</span>

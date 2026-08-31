@@ -3,6 +3,33 @@ import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import type { TutorResponse } from '../types';
 
+export function normalizeMathText(text: string): string {
+  const normalizedCommands = text
+    .replace(/\\eq\b/g, '=')
+    .replace(/\$\$/g, '$');
+  let insideFormula = false;
+  let result = '';
+
+  for (const character of normalizedCommands) {
+    if (character === '$') {
+      insideFormula = !insideFormula;
+      result += character;
+      continue;
+    }
+    // Model responses occasionally split one formula over several lines.
+    // Joining only while inside delimiters preserves paragraph structure.
+    if (insideFormula && character === '\n') {
+      result += ' ';
+      continue;
+    }
+    result += character;
+  }
+
+  // A missing closing delimiter should not expose the rest of the response as
+  // raw LaTeX. Closing it lets KaTeX render a readable best-effort fallback.
+  return insideFormula ? `${result}$` : result;
+}
+
 function InlineContent({ text }: { text: string }) {
   const parts = text.split(/(\$[^$\n]+\$|\*\*[^*]+\*\*)/g).filter(Boolean);
   return <>{parts.map((part, index) => {
@@ -26,7 +53,7 @@ function InlineContent({ text }: { text: string }) {
 }
 
 export function FormattedText({ text }: { text: string }) {
-  const lines = text.replace(/\\n/g, '\n').split('\n');
+  const lines = normalizeMathText(text.replace(/\\n/g, '\n')).split('\n');
   return (
     <div className="space-y-2">
       {lines.map((rawLine, index) => {

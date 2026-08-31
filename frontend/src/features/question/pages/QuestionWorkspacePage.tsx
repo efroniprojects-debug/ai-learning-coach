@@ -8,9 +8,10 @@ import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
 import { DocumentUpload, type AttachedDocument } from '../components/DocumentUpload';
 import { ConversationHistory } from '../components/ConversationHistory';
-import { SubjectSelector } from '../components/SubjectSelector';
 import type { TutorResponse } from '../types';
-import { DEFAULT_SUBJECT_ID, SUBJECTS } from '@/config/subjects';
+import { SUBJECTS } from '@/config/subjects';
+import { LearningContextSummary } from '@/features/subjects/LearningContextSummary';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
@@ -58,14 +59,8 @@ const STREAM_STAGE_MESSAGES: Record<string, string> = {
 
 export function QuestionWorkspacePage() {
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedSubject = searchParams.get('subject')
-    ?? localStorage.getItem('smarterai-subject')
-    ?? DEFAULT_SUBJECT_ID;
-  const [subjectId, setSubjectId] = useState(
-    SUBJECTS[requestedSubject] ? requestedSubject : DEFAULT_SUBJECT_ID
-  );
-  const subject = SUBJECTS[subjectId];
+  const [searchParams] = useSearchParams();
+  const { subjectId, subject, mathStudyUnits, setSubjectId } = useSelectedSubject();
   const routeState = location.state as { prefilledText?: string; selectedTopic?: string; selectedSubtopic?: string } | null;
   const [response, setResponse] = useState<TutorResponse | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -89,6 +84,22 @@ export function QuestionWorkspacePage() {
     if (routeState?.selectedTopic) setSelectedTopic(routeState.selectedTopic);
     if (routeState?.selectedSubtopic) setSelectedSubtopic(routeState.selectedSubtopic);
   }, [routeState?.selectedTopic, routeState?.selectedSubtopic]);
+
+  useEffect(() => {
+    // Preserve old shared links while keeping the dashboard selection as the
+    // single source of truth for every module.
+    const requestedSubject = searchParams.get('subject');
+    if (requestedSubject && SUBJECTS[requestedSubject] && requestedSubject !== subjectId) {
+      setSubjectId(requestedSubject);
+      setSelectedTopic(null);
+      setSelectedSubtopic(null);
+      setConversationId(null);
+      setResponse(null);
+      setStreamText('');
+      setError(null);
+      setIsFollowUp(false);
+    }
+  }, [searchParams, setSubjectId, subjectId]);
 
   const handleTopicSelect = useCallback((topic: string, subtopic: string) => {
     setSelectedTopic(topic);
@@ -119,6 +130,7 @@ export function QuestionWorkspacePage() {
         body: JSON.stringify({
           text: topicPrefix + text,
           subjectId,
+          studyUnits: subjectId === 'math' ? mathStudyUnits : undefined,
           conversationId: isFollowUp ? conversationId : undefined,
           mode,
           topic: selectedTopic ?? undefined,
@@ -201,7 +213,7 @@ export function QuestionWorkspacePage() {
       window.clearTimeout(timeoutId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [conversationId, document, imageData, isFollowUp, isStreaming, mode, selectedTopic, selectedSubtopic, subjectId]);
+  }, [conversationId, document, imageData, isFollowUp, isStreaming, mathStudyUnits, mode, selectedTopic, selectedSubtopic, subjectId]);
 
   const cancelQuestion = () => {
     abortReasonRef.current = 'user';
@@ -218,17 +230,6 @@ export function QuestionWorkspacePage() {
     setStreamText('');
     setError(null);
     setIsFollowUp(true);
-  };
-
-  const handleSubjectChange = (nextSubjectId: string) => {
-    if (nextSubjectId === subjectId || isStreaming || !SUBJECTS[nextSubjectId]) return;
-    setSubjectId(nextSubjectId);
-    localStorage.setItem('smarterai-subject', nextSubjectId);
-    setSearchParams({ subject: nextSubjectId }, { replace: true });
-    setSelectedTopic(null);
-    setSelectedSubtopic(null);
-    setShowTopics(false);
-    handleNewConversation();
   };
 
   return (
@@ -249,15 +250,14 @@ export function QuestionWorkspacePage() {
         )}
       </div>
 
-      <div className="mb-5">
-        <SubjectSelector value={subjectId} disabled={isStreaming} onChange={handleSubjectChange} />
-      </div>
+      <LearningContextSummary />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* ── Sidebar: Topic + PhET ── */}
         <div className="lg:col-span-1 space-y-4">
           <ConversationHistory
             subjectId={subjectId}
+            studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
             activeConversationId={conversationId}
             onSelect={handleConversationSelect}
             onNew={handleNewConversation}

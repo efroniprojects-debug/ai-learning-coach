@@ -2,12 +2,12 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authMiddleware } from '@/middleware/auth.middleware';
 import { db, progressSnapshots, skillMastery, practiceAttempts } from '@/db';
 import { eq, desc, and, gte } from 'drizzle-orm';
-import { getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
+import { getSubjectConcepts, getSubjectTaxonomy, normalizeStudyUnits } from '@/config/subjects';
 
-function getProgressSubjectId(request: FastifyRequest): string {
-  const subjectId = (request.query as { subjectId?: string }).subjectId ?? 'physics';
-  getSubjectConfig(subjectId);
-  return subjectId;
+function getProgressContext(request: FastifyRequest): { subjectId: string; studyUnits: number } {
+  const query = request.query as { subjectId?: string; studyUnits?: string };
+  const subjectId = query.subjectId ?? 'physics';
+  return { subjectId, studyUnits: normalizeStudyUnits(subjectId, Number(query.studyUnits)) };
 }
 
 export async function progressRoutes(app: FastifyInstance) {
@@ -17,10 +17,10 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
         const configuredConcepts = new Set(getSubjectConcepts(subjectId));
         const mastery = (await db.query.skillMastery.findMany({
-          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, studyUnits)),
         })).filter((item) => configuredConcepts.has(item.conceptId));
         const bySubtopic = new Map(mastery.map((item) => [item.conceptId, item]));
         const taxonomy = getSubjectTaxonomy(subjectId);
@@ -54,7 +54,7 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -64,13 +64,14 @@ export async function progressRoutes(app: FastifyInstance) {
           where: and(
             eq(progressSnapshots.userId, request.user.userId),
             eq(progressSnapshots.subjectId, subjectId),
+            eq(progressSnapshots.studyUnits, studyUnits),
             eq(progressSnapshots.date, today)
           ),
         });
 
         // Get mastery distribution
         const allMastery = await db.query.skillMastery.findMany({
-          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, studyUnits)),
         });
 
         const distribution = {
@@ -112,7 +113,7 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
 
         // Get last 30 days
         const thirtyDaysAgo = new Date();
@@ -122,6 +123,7 @@ export async function progressRoutes(app: FastifyInstance) {
           where: and(
             eq(progressSnapshots.userId, request.user.userId),
             eq(progressSnapshots.subjectId, subjectId),
+            eq(progressSnapshots.studyUnits, studyUnits),
             gte(progressSnapshots.date, thirtyDaysAgo)
           ),
           orderBy: [desc(progressSnapshots.date)],
@@ -150,10 +152,10 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
 
         const allMastery = await db.query.skillMastery.findMany({
-          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, studyUnits)),
           orderBy: [desc(skillMastery.eloRating)],
         });
 
@@ -182,10 +184,10 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
 
         const weakMastery = await db.query.skillMastery.findMany({
-          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId)),
+          where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, studyUnits)),
           orderBy: [skillMastery.eloRating],
           limit: 5,
         });
@@ -211,11 +213,11 @@ export async function progressRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-        const subjectId = getProgressSubjectId(request);
+        const { subjectId, studyUnits } = getProgressContext(request);
 
         // Get all-time stats
         const allAttempts = await db.query.practiceAttempts.findMany({
-          where: and(eq(practiceAttempts.userId, request.user.userId), eq(practiceAttempts.subjectId, subjectId)),
+          where: and(eq(practiceAttempts.userId, request.user.userId), eq(practiceAttempts.subjectId, subjectId), eq(practiceAttempts.studyUnits, studyUnits)),
         });
 
         const totalAttempts = allAttempts.length;

@@ -9,6 +9,7 @@ import { db, knowledgeChunks } from '@/db';
 
 const uploadFileSchema = z.object({
   subjectId: z.string().optional().default('physics'),
+  studyUnits: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
   fileName: z.string().min(1, 'File name is required'),
   mimeType: z.string().min(1, 'MIME type is required'),
   fileSizeBytes: z.number().min(1, 'File size is required'),
@@ -17,6 +18,7 @@ const uploadFileSchema = z.object({
 
 interface UploadFileBody {
   subjectId?: string;
+  studyUnits?: 3 | 4 | 5;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
@@ -49,7 +51,8 @@ export async function uploadRoutes(app: FastifyInstance) {
           body.mimeType,
           body.fileSizeBytes,
           body.storageUrl,
-          body.subjectId
+          body.subjectId,
+          body.studyUnits,
         );
 
         // TODO: Enqueue OCR job (async processing)
@@ -78,8 +81,9 @@ export async function uploadRoutes(app: FastifyInstance) {
           return reply.status(401).send({ error: 'Unauthorized' });
         }
 
-        const subjectId = (request.query as { subjectId?: string }).subjectId ?? 'physics';
-        const uploads = await UploadService.listUserUploads(request.user.userId, 20, subjectId);
+        const query = request.query as { subjectId?: string; studyUnits?: string };
+        const subjectId = query.subjectId ?? 'physics';
+        const uploads = await UploadService.listUserUploads(request.user.userId, 20, subjectId, Number(query.studyUnits));
         reply.status(200).send({ uploads });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to list uploads';
@@ -171,6 +175,7 @@ export async function uploadRoutes(app: FastifyInstance) {
           await db.insert(knowledgeChunks).values({
             sourceType: 'custom',
             subjectId: upload.subjectId,
+            studyUnits: upload.studyUnits,
             sourceId: uploadId,
             sourceDocumentId: uploadId as any,
             chunkText: chunk.text,

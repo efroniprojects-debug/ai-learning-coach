@@ -109,6 +109,7 @@ export const uploadedFiles = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     fileName: varchar('file_name', { length: 255 }).notNull(),
     fileSizeBytes: integer('file_size_bytes'),
     mimeType: varchar('mime_type', { length: 100 }),
@@ -122,7 +123,7 @@ export const uploadedFiles = pgTable(
   (table: any) => {
     return {
       userIdIdx: index('uploaded_files_user_id_idx').on(table.userId),
-      userSubjectIdx: index('uploaded_files_user_subject_idx').on(table.userId, table.subjectId),
+      userSubjectIdx: index('uploaded_files_user_subject_units_idx').on(table.userId, table.subjectId, table.studyUnits),
       statusIdx: index('uploaded_files_status_idx').on(table.processingStatus),
       createdAtIdx: index('uploaded_files_created_at_idx').on(table.createdAt),
     };
@@ -135,6 +136,7 @@ export const knowledgeChunks = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     sourceType: varchar('source_type', { length: 50 }).notNull(),
     subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     sourceId: varchar('source_id', { length: 255 }),
     sourceDocumentId: uuid('source_document_id').references(() => uploadedFiles.id, {
       onDelete: 'set null',
@@ -148,13 +150,28 @@ export const knowledgeChunks = pgTable(
   (table: any) => {
     return {
       sourceTypeIdx: index('knowledge_chunks_source_type_idx').on(table.sourceType),
-      subjectIdx: index('knowledge_chunks_subject_idx').on(table.subjectId),
+      subjectIdx: index('knowledge_chunks_subject_units_idx').on(table.subjectId, table.studyUnits),
       sourceDocumentIdx: index('knowledge_chunks_source_document_idx').on(
         table.sourceDocumentId
       ),
       createdAtIdx: index('knowledge_chunks_created_at_idx').on(table.createdAt),
     };
   }
+);
+
+export const driveTextCache = pgTable(
+  'drive_text_cache',
+  {
+    fileId: varchar('file_id', { length: 255 }).primaryKey(),
+    subjectId: varchar('subject_id', { length: 50 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    sourceModifiedAt: timestamp('source_modified_at'),
+    extractedText: text('extracted_text').notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table: any) => ({
+    subjectIdx: index('drive_text_cache_subject_idx').on(table.subjectId),
+  })
 );
 
 export const practiceAttempts = pgTable(
@@ -165,6 +182,7 @@ export const practiceAttempts = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     questionId: uuid('question_id').notNull(), // Reference to knowledge chunk or practice problem
     submittedAnswer: text('submitted_answer'),
     isCorrect: boolean('is_correct'),
@@ -176,7 +194,7 @@ export const practiceAttempts = pgTable(
   (table: any) => {
     return {
       userIdIdx: index('practice_attempts_user_id_idx').on(table.userId),
-      userSubjectIdx: index('practice_attempts_user_subject_idx').on(table.userId, table.subjectId),
+      userSubjectIdx: index('practice_attempts_user_subject_units_idx').on(table.userId, table.subjectId, table.studyUnits),
       questionIdIdx: index('practice_attempts_question_id_idx').on(table.questionId),
       createdAtIdx: index('practice_attempts_created_at_idx').on(table.createdAt),
     };
@@ -191,6 +209,7 @@ export const skillMastery = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     conceptId: varchar('concept_id', { length: 255 }).notNull(), // Physics concept (force, acceleration, etc.)
     eloRating: integer('elo_rating').default(1000),
     attemptsCount: integer('attempts_count').default(0),
@@ -201,9 +220,10 @@ export const skillMastery = pgTable(
   },
   (table: any) => {
     return {
-      userSubjectConceptIdx: uniqueIndex('skill_mastery_user_subject_concept_idx').on(
+      userSubjectConceptIdx: uniqueIndex('skill_mastery_user_subject_units_concept_idx').on(
         table.userId,
         table.subjectId,
+        table.studyUnits,
         table.conceptId
       ),
       eloIdx: index('skill_mastery_elo_idx').on(table.eloRating),
@@ -244,6 +264,7 @@ export const progressSnapshots = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     date: timestamp('date').notNull(),
     masteryLevels: jsonb('mastery_levels'), // concept_id -> elo_rating
     attemptsToday: integer('attempts_today').default(0),
@@ -254,7 +275,7 @@ export const progressSnapshots = pgTable(
   },
   (table: any) => {
     return {
-      userSubjectDateIdx: uniqueIndex('progress_snapshots_user_subject_date_idx').on(table.userId, table.subjectId, table.date),
+      userSubjectDateIdx: uniqueIndex('progress_snapshots_user_subject_units_date_idx').on(table.userId, table.subjectId, table.studyUnits, table.date),
       userIdIdx: index('progress_snapshots_user_id_idx').on(table.userId),
     };
   }
@@ -286,6 +307,7 @@ export const conversations = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     title: varchar('title', { length: 500 }),
     subject: varchar('subject', { length: 50 }).default('physics'),
+    studyUnits: integer('study_units').notNull().default(0),
     folderId: uuid('folder_id').references(() => conversationFolders.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -327,6 +349,7 @@ export type UploadedFile = typeof uploadedFiles.$inferSelect;
 export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
 export type KnowledgeChunk = typeof knowledgeChunks.$inferSelect;
 export type NewKnowledgeChunk = typeof knowledgeChunks.$inferInsert;
+export type DriveTextCache = typeof driveTextCache.$inferSelect;
 export type PracticeAttempt = typeof practiceAttempts.$inferSelect;
 export type NewPracticeAttempt = typeof practiceAttempts.$inferInsert;
 export type SkillMastery = typeof skillMastery.$inferSelect;
