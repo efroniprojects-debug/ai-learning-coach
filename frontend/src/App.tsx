@@ -9,6 +9,7 @@ import { UploadPage } from '@/features/knowledge/pages/UploadPage';
 import { PracticePage } from '@/features/practice/pages/PracticePage';
 import { BagruyotSidebar } from '@/components/BagruyotSidebar';
 import { ScientificCalculator } from '@/components/calculator/ScientificCalculator';
+import { StudentGuide } from '@/components/StudentGuide';
 
 const queryClient = new QueryClient();
 const ProgressDashboard = lazy(() => import('@/features/progress/pages/ProgressDashboard').then((module) => ({ default: module.ProgressDashboard })));
@@ -219,6 +220,7 @@ export default function App() {
       <BrowserRouter>
         <div className="flex min-h-screen flex-col bg-white dark:bg-slate-950 dark:text-slate-100">
           <GlobalHeader theme={theme} onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
+          <StudentGuide />
           <main className="flex-1 pt-16">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
