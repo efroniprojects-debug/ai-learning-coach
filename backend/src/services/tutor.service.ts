@@ -351,8 +351,10 @@ export function normalizeTutorText(value: string): string {
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, '')
+    .replace(/[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff]+/g, '')
     .replace(/\\n/g, '\n')
     .replace(/\u200b|\ufeff/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
