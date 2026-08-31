@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
@@ -132,9 +132,21 @@ function DraggableCalculator({ onClose }: { onClose: () => void }) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [calcOpen, setCalcOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <>
+      <nav className="fixed top-3 left-3 z-[7500] flex gap-2" dir="rtl" aria-label="ניווט ראשי">
+        {location.pathname !== '/dashboard' && (
+          <button onClick={() => navigate(-1)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow hover:bg-gray-50" aria-label="חזור לעמוד הקודם">
+            ↩ חזור
+          </button>
+        )}
+        <button onClick={() => navigate('/dashboard')} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow hover:bg-blue-700" aria-label="חזרה לדף הבית">
+          🏠 בית
+        </button>
+      </nav>
       {children}
       <BagruyotSidebar />
 

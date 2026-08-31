@@ -112,7 +112,7 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
             {response.socraticQuestion && (
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">שאלה לחשיבה</p>
-                <p className="text-blue-800 text-sm">{response.socraticQuestion}</p>
+                <div className="text-blue-800 text-sm"><FormattedText text={response.socraticQuestion} /></div>
               </div>
             )}
 
@@ -122,8 +122,8 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
                 <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">טעויות נפוצות</p>
                 {response.misconceptions.map((m, i) => (
                   <div key={i} className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
-                    <p className="text-amber-800 line-through opacity-70">{m.misconception}</p>
-                    <p className="text-green-700 mt-1">✓ {m.correction}</p>
+                    <div className="text-amber-800 line-through opacity-70"><FormattedText text={m.misconception} /></div>
+                    <div className="text-green-700 mt-1 flex gap-1"><span>✓</span><FormattedText text={m.correction} /></div>
                   </div>
                 ))}
               </div>
@@ -178,8 +178,8 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
               <div key={i}>
                 {i < revealedHints ? (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
-                    <span className="font-medium text-green-700">רמז {i + 1}: </span>
-                    {hint}
+                    <span className="font-medium text-green-700">רמז {i + 1}:</span>
+                    <FormattedText text={hint} />
                   </div>
                 ) : i === revealedHints ? (
                   <button

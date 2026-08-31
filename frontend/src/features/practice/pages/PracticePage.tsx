@@ -3,10 +3,8 @@ import { ProblemDisplay } from '@/features/practice/components/ProblemDisplay';
 import { MasteryFeedback } from '@/features/practice/components/MasteryFeedback';
 import { AnswerForm } from '@/features/practice/components/AnswerForm';
 import { practiceApi } from '@/services/practice.api';
-import { useAuth } from '@/services/auth.store';
 
 export function PracticePage() {
-  const { user } = useAuth();
   const [currentProblem, setCurrentProblem] = useState<any>(null);
   const [feedback, setFeedback] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +33,7 @@ export function PracticePage() {
       const problem = await practiceApi.selectProblem();
       setCurrentProblem(problem);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load problem');
+      setError(err instanceof Error ? err.message : 'טעינת התרגיל נכשלה');
     } finally {
       setLoading(false);
     }
@@ -59,7 +57,7 @@ export function PracticePage() {
         isCorrect,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submission failed');
+      setError(err instanceof Error ? err.message : 'שליחת התשובה נכשלה');
     } finally {
       setSubmitting(false);
     }
@@ -70,14 +68,14 @@ export function PracticePage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading problem...</p>
+          <p className="text-gray-600">טוען תרגיל...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4" dir="rtl">
       <div className="max-w-3xl mx-auto">
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -88,9 +86,9 @@ export function PracticePage() {
         {!feedback && (
           <>
             <div className="mb-6 flex justify-between items-center">
-              <h1 className="text-3xl font-bold">Practice</h1>
+              <h1 className="text-3xl font-bold">תרגול מותאם אישית</h1>
               <div className="text-sm text-gray-600">
-                Time: {Math.floor(timeSpent / 60)}:{String(timeSpent % 60).padStart(2, '0')}
+                זמן: {Math.floor(timeSpent / 60)}:{String(timeSpent % 60).padStart(2, '0')}
               </div>
             </div>
 

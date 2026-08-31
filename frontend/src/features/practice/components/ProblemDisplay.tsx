@@ -1,37 +1,51 @@
 import React from 'react';
 
+const CONCEPT_NAMES: Record<string, string> = {
+  Force: 'כוח', Acceleration: 'תאוצה', Velocity: 'מהירות', Energy: 'אנרגיה',
+  Momentum: 'תנע', Gravity: 'כבידה', Waves: 'גלים', Electricity: 'חשמל',
+};
+
+function practiceQuestion(concept: string, difficulty: number): string {
+  const name = CONCEPT_NAMES[concept] ?? concept;
+  if (concept === 'Force') {
+    return difficulty <= 2
+      ? 'על גוף שמסתו 4 ק״ג פועל כוח שקול של 12 ניוטון. מהי תאוצת הגוף? הצג את הנוסחה ואת דרך החישוב.'
+      : 'על גוף שמסתו 8 ק״ג פועלים שני כוחות מנוגדים: 24 ניוטון ימינה ו־8 ניוטון שמאלה. חשב את הכוח השקול ואת תאוצת הגוף, והסבר את כיוון התנועה.';
+  }
+  return `פתור תרגיל ברמת קושי ${difficulty} בנושא ${name}. כתוב מה ידוע, באיזו נוסחה בחרת, את שלבי החישוב ואת התשובה עם יחידות.`;
+}
+
 export function ProblemDisplay({ problem }: { problem: any }) {
   return (
-    <div className="bg-white rounded-lg shadow p-8 mb-6">
+    <div className="bg-white rounded-lg shadow p-8 mb-6" dir="rtl">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Concept: {problem.conceptId}</h2>
+          <h2 className="text-2xl font-bold mb-2">נושא: {CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId}</h2>
           <div className="flex items-center gap-4">
             <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-              Difficulty: {problem.difficulty}/5
+              רמת קושי: {problem.difficulty}/5
             </span>
             <span className="text-sm text-gray-600">
-              Current ELO: {problem.eloRating}
+              דירוג ELO נוכחי: {problem.eloRating}
             </span>
           </div>
         </div>
       </div>
 
       <div className="bg-gray-50 p-6 rounded border border-gray-200 mb-6">
-        <h3 className="font-semibold text-lg mb-4">Question:</h3>
+        <h3 className="font-semibold text-lg mb-4">שאלה:</h3>
         <p className="text-gray-800 leading-relaxed">
-          A {problem.difficulty === 1 ? 'simple' : problem.difficulty === 5 ? 'challenging' : 'moderate'} problem about {problem.conceptId}.
-          Show your understanding by explaining your approach.
+          {practiceQuestion(problem.conceptId, problem.difficulty)}
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 text-center">
         <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded">
-          <p className="text-sm text-gray-600">Correct Rate</p>
+          <p className="text-sm text-gray-600">אחוז הצלחה</p>
           <p className="text-2xl font-bold text-green-600">65%</p>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded">
-          <p className="text-sm text-gray-600">Success Streak</p>
+          <p className="text-sm text-gray-600">רצף הצלחות</p>
           <p className="text-2xl font-bold text-purple-600">3</p>
         </div>
       </div>
