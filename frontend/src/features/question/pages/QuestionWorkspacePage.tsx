@@ -6,6 +6,7 @@ import { ModeSelector } from '../components/ModeSelector';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
+import { DocumentUpload, type AttachedDocument } from '../components/DocumentUpload';
 import { ConversationHistory } from '../components/ConversationHistory';
 import type { TutorResponse } from '../types';
 
@@ -22,6 +23,7 @@ export function QuestionWorkspacePage() {
   const [streamText, setStreamText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [imageData, setImageData] = useState<string | null>(null);
+  const [document, setDocument] = useState<AttachedDocument | null>(null);
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [mode, setMode] = useState<Mode>('step_by_step');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(routeState?.selectedTopic ?? null);
@@ -63,6 +65,9 @@ export function QuestionWorkspacePage() {
           topic: selectedTopic ?? undefined,
           subtopic: selectedSubtopic ?? undefined,
           imageData: imageData ?? undefined,
+          documentData: document?.data,
+          documentMimeType: document?.mimeType,
+          documentName: document?.name,
         }),
         signal: abortRef.current.signal,
       });
@@ -101,6 +106,7 @@ export function QuestionWorkspacePage() {
             setConversationId(d.conversationId);
             setIsStreaming(false);
             setImageData(null);
+            setDocument(null);
             receivedDone = true;
             if (d.masteryUpdate && d.masteryUpdate.previousElo < 900 && d.masteryUpdate.elo >= 900) {
               const levels: Record<string, string> = { novice: 'מתחיל', intermediate: 'ביניים', proficient: 'שולט', expert: 'מומחה' };
@@ -121,7 +127,7 @@ export function QuestionWorkspacePage() {
       setError(err instanceof Error ? err.message : 'שגיאה לא צפויה');
       setIsStreaming(false);
     }
-  }, [conversationId, imageData, isFollowUp, mode, selectedTopic, selectedSubtopic]);
+  }, [conversationId, document, imageData, isFollowUp, mode, selectedTopic, selectedSubtopic]);
 
   const handleNewConversation = () => {
     setConversationId(null); setResponse(null); setStreamText(''); setError(null); setIsFollowUp(false);
@@ -223,11 +229,15 @@ export function QuestionWorkspacePage() {
             </div>
           )}
 
-          {/* Image upload */}
-          <div className="px-1">
-            <ImageUpload onImage={setImageData} disabled={isStreaming} />
+          {/* Attachments */}
+          <div className="flex flex-wrap items-start gap-3 px-1">
+            <ImageUpload onImage={setImageData} disabled={isStreaming || Boolean(document)} />
+            <DocumentUpload onDocument={setDocument} disabled={isStreaming || Boolean(imageData)} />
             {imageData && (
-              <p className="text-xs text-blue-600 mt-1">📷 התמונה תישלח לניתוח עם השאלה</p>
+              <p className="w-full text-xs text-blue-600">📷 התמונה תישלח לניתוח עם השאלה</p>
+            )}
+            {document && (
+              <p className="w-full text-xs text-violet-700">📄 המסמך ייקרא וינותח יחד עם השאלה</p>
             )}
           </div>
 

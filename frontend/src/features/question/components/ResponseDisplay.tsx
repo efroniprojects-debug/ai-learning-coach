@@ -51,6 +51,27 @@ interface Props {
 export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('explanation');
   const [revealedHints, setRevealedHints] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
+
+  const toggleSpeech = () => {
+    if (!('speechSynthesis' in window)) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const readableText = [
+      response.explanation,
+      ...(response.steps ?? []).map((step) => `${step.title}. ${step.content}`),
+    ].join('. ').replace(/[$*_#\\]/g, ' ');
+    const utterance = new SpeechSynthesisUtterance(readableText);
+    utterance.lang = 'he-IL';
+    utterance.rate = 0.95;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const tabs: { id: Tab; label: string; emoji: string; count?: number }[] = [
     { id: 'explanation', label: 'הסבר', emoji: '💡' },
@@ -76,7 +97,7 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" dir="rtl">
       {/* Tab navigation */}
-      <div className="flex border-b border-gray-200 bg-gray-50">
+      <div className="flex flex-wrap items-center border-b border-gray-200 bg-gray-50">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -98,6 +119,11 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
             )}
           </button>
         ))}
+        {'speechSynthesis' in window && (
+          <button onClick={toggleSpeech} className={`mr-auto ml-2 my-1 rounded-lg border px-3 py-2 text-xs ${speaking ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'}`}>
+            {speaking ? '⏹ עצור הקראה' : '🔊 הקרא תשובה'}
+          </button>
+        )}
       </div>
 
       <div className="p-6">

@@ -5,7 +5,8 @@ const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';
 
 async function startServer() {
-  const app = Fastify({ logger: true });
+  // Base64 attachments are ~33% larger than their source files.
+  const app = Fastify({ logger: true, bodyLimit: 12 * 1024 * 1024 });
 
   // Open CORS — allow all origins for cross-device access (phone, tablet, desktop)
   await app.register(cors, {

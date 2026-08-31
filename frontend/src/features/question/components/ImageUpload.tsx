@@ -67,7 +67,7 @@ export function ImageUpload({ onImage, disabled }: ImageUploadProps) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-blue-200 bg-blue-50 rounded-lg text-blue-700 hover:bg-blue-100 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="צרף תמונה (jpg/png, עד 5MB)"
         >
           <span>📷</span>

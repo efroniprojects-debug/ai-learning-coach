@@ -53,11 +53,11 @@ export function ConversationHistory({ activeConversationId, onSelect, onNew }: P
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-3" dir="rtl">
-      <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">שיחות קודמות</h2><button onClick={onNew} className="text-xs font-medium text-blue-600">+ חדשה</button></div>
+      <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold text-gray-900">שיחות קודמות</h2><button onClick={onNew} className="bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">+ חדשה</button></div>
       {loading ? <div className="h-20 animate-pulse rounded bg-gray-100" /> : (
         <div className="max-h-56 space-y-1 overflow-y-auto">
           {items.length === 0 && <p className="py-3 text-center text-xs text-gray-400">אין שיחות שמורות עדיין</p>}
-          {items.map((item) => <button key={item.id} onClick={() => void selectConversation(item)} className={`w-full rounded-lg p-2 text-right text-xs ${item.id === activeConversationId ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}><span className="block truncate font-medium">{item.title || 'שיחה ללא כותרת'}</span><span className="text-[11px] text-gray-400">{new Date(item.updatedAt).toLocaleDateString('he-IL')}</span></button>)}
+          {items.map((item) => <button key={item.id} onClick={() => void selectConversation(item)} className={`w-full rounded-lg border border-transparent p-2 text-right text-xs ${item.id === activeConversationId ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-800 hover:border-gray-200 hover:bg-gray-50'}`}><span className="block truncate font-medium">{item.title || 'שיחה ללא כותרת'}</span><span className="text-[11px] text-gray-500">{new Date(item.updatedAt).toLocaleDateString('he-IL')}</span></button>)}
         </div>
       )}
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

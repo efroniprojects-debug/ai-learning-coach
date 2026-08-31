@@ -33,6 +33,9 @@ export interface TutorQuestion {
   text: string;
   imageUrls?: string[];
   imageData?: string; // base64 image for Gemini Vision
+  documentData?: string;
+  documentMimeType?: string;
+  documentName?: string;
   userId: string;
   subjectId?: string;
   conversationId?: string;
@@ -183,12 +186,16 @@ export class TutorService {
 
     // Build current user turn parts
     type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
-    const currentParts: GeminiPart[] = question.imageData
-      ? [
-          { text: promptText },
-          { inline_data: { mime_type: 'image/jpeg', data: question.imageData } },
-        ]
-      : [{ text: promptText }];
+    const attachmentInstruction = question.documentName
+      ? `\n\nלשאלה מצורף המסמך "${question.documentName}". יש לקרוא אותו ולהסתמך עליו בתשובה.`
+      : '';
+    const currentParts: GeminiPart[] = [{ text: promptText + attachmentInstruction }];
+    if (question.imageData) {
+      currentParts.push({ inline_data: { mime_type: 'image/jpeg', data: question.imageData } });
+    }
+    if (question.documentData && question.documentMimeType) {
+      currentParts.push({ inline_data: { mime_type: question.documentMimeType, data: question.documentData } });
+    }
 
     const contents = [
       ...historyContents,

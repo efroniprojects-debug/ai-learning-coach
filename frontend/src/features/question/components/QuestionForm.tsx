@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { VoiceInput } from './VoiceInput';
 
 interface QuestionFormProps {
   onSubmit: (text: string) => void | Promise<void>;
@@ -34,6 +35,11 @@ export function QuestionForm({ onSubmit, disabled, placeholder, initialValue = '
         disabled={disabled}
         placeholder={placeholder ?? 'כתוב את השאלה שלך כאן...'}
         className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+      />
+
+      <VoiceInput
+        disabled={disabled}
+        onTranscript={(text) => setQuestion((current) => current ? `${current} ${text}` : text)}
       />
 
       <button
