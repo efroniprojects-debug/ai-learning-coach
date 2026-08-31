@@ -1,17 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UploadForm } from '../components/UploadForm';
 import { UploadList } from '../components/UploadList';
 import { DriveFilesPanel } from '../components/DriveFilesPanel';
 import type { Upload } from '../types';
-import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
+import { SubjectSelector } from '@/features/question/components/SubjectSelector';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 export function UploadPage() {
+  const { subjectId, subject, setSubjectId } = useSelectedSubject();
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'drive'>('upload');
+
+  useEffect(() => {
+    const loadUploads = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+        });
+        const data = await response.json() as { uploads?: Upload[]; error?: string };
+        if (!response.ok) throw new Error(data.error ?? 'טעינת הקבצים נכשלה');
+        setUploads(data.uploads ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'טעינת הקבצים נכשלה');
+      } finally {
+        setLoading(false);
+      }
+    };
+    void loadUploads();
+  }, [subjectId]);
 
   const handleFileUpload = async (file: File) => {
     setLoading(true);
@@ -20,7 +42,8 @@ export function UploadPage() {
     try {
       // TODO: Upload file to storage service
       // For now, mock upload
-      const mockUrl = `gs://ai-learning-coach-storage/${file.name}`;
+      // Keep each subject in its own logical storage namespace.
+      const mockUrl = `gs://ai-learning-coach-storage/${subjectId}/${file.name}`;
 
       const response = await fetch(`${API_BASE}/api/v1/uploads/file`, {
         method: 'POST',
@@ -33,7 +56,7 @@ export function UploadPage() {
           mimeType: file.type,
           fileSizeBytes: file.size,
           storageUrl: mockUrl,
-          subjectId: DEFAULT_SUBJECT_ID,
+          subjectId,
         }),
       });
 
@@ -65,7 +88,7 @@ export function UploadPage() {
       }
 
       // Refresh uploads list
-      const listResponse = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${DEFAULT_SUBJECT_ID}`, {
+      const listResponse = await fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
@@ -99,10 +122,11 @@ export function UploadPage() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4" dir="rtl">
-      <h1 className="text-3xl font-bold mb-2">העלה חומרי לימוד</h1>
+      <h1 className="text-3xl font-bold mb-2">העלה חומרי לימוד — {subject.nameHe}</h1>
       <p className="text-gray-600 mb-8">
         העלה קבצי PDF, תמונות או טקסט. המערכת תחלץ את הטקסט, תפרק לקטעים, וגנרט embeddings לחיפוש סמנטי.
       </p>
+      <div className="mb-6"><SubjectSelector value={subjectId} disabled={loading} onChange={setSubjectId} /></div>
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded text-red-700">
@@ -115,7 +139,7 @@ export function UploadPage() {
         <button onClick={() => setActiveTab('drive')} className={`px-4 py-3 text-sm font-medium ${activeTab === 'drive' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>📁 חומרי לימוד מ־Drive</button>
       </div>
 
-      {activeTab === 'drive' ? <DriveFilesPanel /> : <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {activeTab === 'drive' ? <DriveFilesPanel subjectId={subjectId} /> : <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
           <h2 className="text-xl font-semibold mb-4">הוסף קובץ</h2>
           <UploadForm onUpload={handleFileUpload} disabled={loading} />

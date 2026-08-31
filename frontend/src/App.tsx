@@ -55,8 +55,8 @@ function DashboardPage() {
   return (
     <div className="max-w-4xl mx-auto py-10 px-4" dir="rtl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-1">SmarterAI 🔬</h1>
-        <p className="text-gray-500 text-sm">מורה פרטי לפיזיקה — בגרות 5 יח"ל</p>
+        <h1 className="text-3xl font-bold mb-1">SmarterAI 🧠</h1>
+        <p className="text-gray-500 text-sm">סביבת למידה חכמה לפיזיקה ולמתמטיקה</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link to="/ask" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-400 transition-all block">

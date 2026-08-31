@@ -27,17 +27,22 @@ export interface DriveSyncResult {
 }
 
 export class DriveService {
-  private static lastSyncAt: string | null = null;
+  private static lastSyncAtBySubject: Record<string, string | null> = {};
 
-  static isConfigured(): boolean {
-    return Boolean(
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON &&
-      (process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID)
-    );
+  private static getSubjectFolderId(subjectId: string): string | undefined {
+    if (subjectId === 'math') return process.env.GOOGLE_DRIVE_MATH_EXAMS_FOLDER_ID;
+    if (subjectId === 'physics') {
+      return process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID;
+    }
+    return undefined;
   }
 
-  static getLastSyncAt(): string | null {
-    return this.lastSyncAt;
+  static isConfigured(subjectId: string = 'physics'): boolean {
+    return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && this.getSubjectFolderId(subjectId));
+  }
+
+  static getLastSyncAt(subjectId: string = 'physics'): string | null {
+    return this.lastSyncAtBySubject[subjectId] ?? null;
   }
 
   static isWriteConfigured(): boolean {
@@ -115,12 +120,9 @@ export class DriveService {
     return google.drive({ version: 'v3', auth });
   }
 
-  static async listFiles(): Promise<DriveFileSummary[]> {
-    if (!this.isConfigured()) return [];
-    const folderId = (
-      process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID ||
-      process.env.GOOGLE_DRIVE_FOLDER_ID
-    ) as string;
+  static async listFiles(subjectId: string = 'physics'): Promise<DriveFileSummary[]> {
+    if (!this.isConfigured(subjectId)) return [];
+    const folderId = this.getSubjectFolderId(subjectId) as string;
     const drive = this.getClient();
     const discovered: drive_v3.Schema$File[] = [];
     const foldersToScan = [folderId];
@@ -225,9 +227,9 @@ export class DriveService {
     return text;
   }
 
-  static async syncFolder(): Promise<DriveSyncResult> {
-    if (!this.isConfigured()) throw new Error('GOOGLE_DRIVE_NOT_CONFIGURED');
-    const files = await this.listFiles();
+  static async syncFolder(subjectId: string = 'physics'): Promise<DriveSyncResult> {
+    if (!this.isConfigured(subjectId)) throw new Error('GOOGLE_DRIVE_NOT_CONFIGURED');
+    const files = await this.listFiles(subjectId);
     const result: DriveSyncResult = {
       filesScanned: files.length,
       filesIndexed: 0,
@@ -244,7 +246,7 @@ export class DriveService {
         if (chunks.length > 0) {
           await db.insert(knowledgeChunks).values(chunks.map((chunk) => ({
             sourceType: 'google_drive',
-            subjectId: 'physics',
+            subjectId,
             sourceId: file.id,
             chunkText: chunk.text,
             metadata: {
@@ -266,7 +268,7 @@ export class DriveService {
       }
     }
 
-    this.lastSyncAt = result.syncedAt;
+    this.lastSyncAtBySubject[subjectId] = result.syncedAt;
     return result;
   }
 }

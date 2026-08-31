@@ -220,9 +220,14 @@ async function startServer() {
 
   if (dbAvailable && process.env.GOOGLE_SERVICE_ACCOUNT_JSON && (process.env.GOOGLE_DRIVE_PHYSICS_EXAMS_FOLDER_ID || process.env.GOOGLE_DRIVE_FOLDER_ID)) {
     const { DriveService } = await import('./services/drive.service');
-    void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Initial Drive sync failed'));
+    const configuredDriveSubjects = ['physics', 'math'].filter((subjectId) => DriveService.isConfigured(subjectId));
+    for (const subjectId of configuredDriveSubjects) {
+      void DriveService.syncFolder(subjectId).catch((error) => app.log.warn({ error, subjectId }, 'Initial Drive sync failed'));
+    }
     const driveSyncTimer = setInterval(() => {
-      void DriveService.syncFolder().catch((error) => app.log.warn({ error }, 'Scheduled Drive sync failed'));
+      for (const subjectId of configuredDriveSubjects) {
+        void DriveService.syncFolder(subjectId).catch((error) => app.log.warn({ error, subjectId }, 'Scheduled Drive sync failed'));
+      }
     }, 30 * 60 * 1000);
     driveSyncTimer.unref();
   }
@@ -243,6 +248,15 @@ async function startServer() {
   app.get('/api/v1/physics/topics', async (_req, reply) => {
     const { PHYSICS_TOPIC_TAXONOMY } = await import('@/config/subjects');
     return reply.send(PHYSICS_TOPIC_TAXONOMY);
+  });
+
+  app.get<{ Params: { subjectId: string } }>('/api/v1/subjects/:subjectId/topics', async (request, reply) => {
+    try {
+      const { getSubjectTaxonomy } = await import('@/config/subjects');
+      return reply.send(getSubjectTaxonomy(request.params.subjectId));
+    } catch (error) {
+      return reply.status(404).send({ error: error instanceof Error ? error.message : 'Subject not found' });
+    }
   });
 
   app.get('/api/v1/physics/phet', async (request, reply) => {

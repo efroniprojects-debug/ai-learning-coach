@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FormattedText } from '@/features/question/components/ResponseDisplay';
-import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
+import { SubjectSelector } from '@/features/question/components/SubjectSelector';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const STUDIO_TIMEOUT_MS = 100_000;
@@ -19,6 +20,7 @@ interface DriveFile { id: string; name: string; mimeType: string; }
 interface UploadFile { id: string; fileName: string; mimeType: string; processingStatus: string; }
 
 export function StudioPage() {
+  const { subjectId, subject, setSubjectId } = useSelectedSubject();
   const [sources, setSources] = useState<StudioSource[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sourceQuery, setSourceQuery] = useState('');
@@ -43,7 +45,8 @@ export function StudioPage() {
       setError(null);
       try {
         const [driveResponse, uploadResponse] = await Promise.all([
-          fetch(`${API_BASE}/api/v1/drive/files`), fetch(`${API_BASE}/api/v1/uploads?subjectId=${DEFAULT_SUBJECT_ID}`),
+          fetch(`${API_BASE}/api/v1/drive/files?subjectId=${encodeURIComponent(subjectId)}`),
+          fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`),
         ]);
         if (!driveResponse.ok || !uploadResponse.ok) throw new Error('SOURCE_LOAD_FAILED');
         const driveData = await driveResponse.json() as { files?: DriveFile[] };
@@ -59,7 +62,12 @@ export function StudioPage() {
       finally { setLoading(false); }
     };
     void load();
-  }, [reloadToken]);
+  }, [reloadToken, subjectId]);
+
+  useEffect(() => {
+    setSelected(new Set());
+    setResult('');
+  }, [subjectId]);
 
   useEffect(() => {
     if (!generating) {
@@ -105,7 +113,7 @@ export function StudioPage() {
     }, STUDIO_TIMEOUT_MS);
     setGenerating(true); setGeneratingTask(task); setLastTask(task); setGenerationStatus('מתחיל לקרוא את המקורות…'); setError(null); setResult('');
     try {
-      const requestBody = JSON.stringify({ task, sources: selectedSources, subjectId: DEFAULT_SUBJECT_ID });
+      const requestBody = JSON.stringify({ task, sources: selectedSources, subjectId });
       let response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: requestBody,
@@ -189,10 +197,11 @@ export function StudioPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10" dir="rtl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Studio 📚</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Studio — {subject.nameHe} {subject.icon}</h1>
         <p className="mt-2 text-sm text-gray-600">בחר חומרי לימוד מ־Drive או מהקבצים שהעלית, וצור מהם סיכום או תרגול מותאם.</p>
       </div>
-      <section className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+      <div className="mb-6"><SubjectSelector value={subjectId} disabled={loading || generating} onChange={setSubjectId} /></div>
+      {subjectId === 'physics' && <section className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
         <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">🌐 עדכון מקורות פיזיקה מאומתים</h2>
         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">האיסוף מוגבל למשרד החינוך, ראמ״ה, האוניברסיטה הפתוחה ו־Khan Academy.</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -200,7 +209,7 @@ export function StudioPage() {
           <button onClick={() => void aggregateVerifiedSources()} disabled={aggregating || !aggregateTopic.trim()} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50">{aggregating ? 'מעדכן…' : 'עדכן מקורות'}</button>
         </div>
         {aggregateMessage && <p className="mt-2 text-xs font-medium text-emerald-800 dark:text-emerald-200">✓ {aggregateMessage}</p>}
-      </section>
+      </section>}
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">מקורות</h2><span className="text-xs text-gray-500">נבחרו {selected.size}/10</span></div>

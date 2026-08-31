@@ -63,11 +63,25 @@ export const progressApi = {
   },
 
   getGaps: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/gaps', { params: { subjectId } });
-    return data as {
+    try {
+      const { data } = await apiClient.get('/api/v1/progress/gaps', { params: { subjectId } });
+      return data as {
+        gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
+        topics: Array<{ topic: string; elo: number; score: number }>;
+        hasData: boolean;
+      };
+    } catch {
+      // Older backends do not expose the optional gap radar endpoint yet.
+      // Keep the rest of the progress dashboard usable during rollout.
+      return {
+        gaps: [],
+        topics: [],
+        hasData: false,
+      } as {
       gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
       topics: Array<{ topic: string; elo: number; score: number }>;
       hasData: boolean;
-    };
+      };
+    }
   },
 };

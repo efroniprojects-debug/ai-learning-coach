@@ -1,6 +1,6 @@
 import { db, skillMastery, practiceAttempts, progressSnapshots } from '@/db';
 import { eq, and, desc } from 'drizzle-orm';
-import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig, getSubjectTaxonomy } from '@/config/subjects';
 
 /**
  * Practice Service
@@ -64,9 +64,18 @@ export class PracticeService {
   static async selectNextProblem(userId: string, subjectId: string = DEFAULT_SUBJECT_ID) {
     getSubjectConfig(subjectId);
     // Get user's mastery levels
-    const allMastery = await db.query.skillMastery.findMany({
+    let allMastery = await db.query.skillMastery.findMany({
       where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId)),
     });
+
+    // A new subject starts with its first configured concept so practice is
+    // immediately available without mixing mastery data from another subject.
+    if (allMastery.length === 0) {
+      const firstTopic = Object.values(getSubjectTaxonomy(subjectId))[0];
+      const firstConcept = firstTopic?.subtopics[0];
+      if (!firstConcept) throw new Error('No concepts configured for subject');
+      allMastery = [await this.getOrCreateMastery(userId, firstConcept, subjectId)];
+    }
 
     const weakConcepts = allMastery.filter((m) => (m.eloRating ?? 1000) < 1300);
     const strongConcepts = allMastery.filter((m) => (m.eloRating ?? 1000) >= 1300);

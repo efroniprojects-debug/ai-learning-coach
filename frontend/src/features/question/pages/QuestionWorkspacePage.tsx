@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
 import { ModeSelector } from '../components/ModeSelector';
@@ -8,8 +8,9 @@ import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
 import { DocumentUpload, type AttachedDocument } from '../components/DocumentUpload';
 import { ConversationHistory } from '../components/ConversationHistory';
+import { SubjectSelector } from '../components/SubjectSelector';
 import type { TutorResponse } from '../types';
-import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, SUBJECTS } from '@/config/subjects';
 
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
@@ -57,6 +58,14 @@ const STREAM_STAGE_MESSAGES: Record<string, string> = {
 
 export function QuestionWorkspacePage() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSubject = searchParams.get('subject')
+    ?? localStorage.getItem('smarterai-subject')
+    ?? DEFAULT_SUBJECT_ID;
+  const [subjectId, setSubjectId] = useState(
+    SUBJECTS[requestedSubject] ? requestedSubject : DEFAULT_SUBJECT_ID
+  );
+  const subject = SUBJECTS[subjectId];
   const routeState = location.state as { prefilledText?: string; selectedTopic?: string; selectedSubtopic?: string } | null;
   const [response, setResponse] = useState<TutorResponse | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -109,7 +118,7 @@ export function QuestionWorkspacePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: topicPrefix + text,
-          subjectId: DEFAULT_SUBJECT_ID,
+          subjectId,
           conversationId: isFollowUp ? conversationId : undefined,
           mode,
           topic: selectedTopic ?? undefined,
@@ -192,7 +201,7 @@ export function QuestionWorkspacePage() {
       window.clearTimeout(timeoutId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [conversationId, document, imageData, isFollowUp, isStreaming, mode, selectedTopic, selectedSubtopic]);
+  }, [conversationId, document, imageData, isFollowUp, isStreaming, mode, selectedTopic, selectedSubtopic, subjectId]);
 
   const cancelQuestion = () => {
     abortReasonRef.current = 'user';
@@ -211,6 +220,17 @@ export function QuestionWorkspacePage() {
     setIsFollowUp(true);
   };
 
+  const handleSubjectChange = (nextSubjectId: string) => {
+    if (nextSubjectId === subjectId || isStreaming || !SUBJECTS[nextSubjectId]) return;
+    setSubjectId(nextSubjectId);
+    localStorage.setItem('smarterai-subject', nextSubjectId);
+    setSearchParams({ subject: nextSubjectId }, { replace: true });
+    setSelectedTopic(null);
+    setSelectedSubtopic(null);
+    setShowTopics(false);
+    handleNewConversation();
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-6 px-4" dir="rtl">
       {/* Header */}
@@ -218,7 +238,7 @@ export function QuestionWorkspacePage() {
         <div className="flex items-center gap-4">
           <Link to="/dashboard" className="text-blue-600 hover:text-blue-700 text-sm">→ דשבורד</Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">שאל שאלה בפיזיקה 🔬</h1>
+            <h1 className="text-xl font-bold text-gray-900">שאל שאלה ב{subject.nameHe} {subject.icon}</h1>
             <p className="text-xs text-gray-500">מורה AI אישי — הסברים שלב אחרי שלב</p>
           </div>
         </div>
@@ -229,11 +249,15 @@ export function QuestionWorkspacePage() {
         )}
       </div>
 
+      <div className="mb-5">
+        <SubjectSelector value={subjectId} disabled={isStreaming} onChange={handleSubjectChange} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* ── Sidebar: Topic + PhET ── */}
         <div className="lg:col-span-1 space-y-4">
           <ConversationHistory
-            subjectId={DEFAULT_SUBJECT_ID}
+            subjectId={subjectId}
             activeConversationId={conversationId}
             onSelect={handleConversationSelect}
             onNew={handleNewConversation}
@@ -250,12 +274,12 @@ export function QuestionWorkspacePage() {
             </button>
             {showTopics && (
               <div className="p-3 border-t border-gray-100">
-                <TopicSelector selectedSubtopic={selectedSubtopic} onSelect={handleTopicSelect} />
+                <TopicSelector subjectId={subjectId} selectedSubtopic={selectedSubtopic} onSelect={handleTopicSelect} />
               </div>
             )}
           </div>
 
-          {selectedSubtopic && (
+          {subjectId === 'physics' && selectedSubtopic && (
             <div className="border border-gray-200 rounded-xl p-3">
               <PhetPanel subtopic={selectedSubtopic} />
             </div>
@@ -290,7 +314,9 @@ export function QuestionWorkspacePage() {
               mode === 'diagnose'
                 ? 'שתף את הניסיון שלך (גם אם שגוי) — המורה יאבחן את הטעות...'
                 : isFollowUp ? 'שאל שאלת המשך...'
-                : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
+                : subjectId === 'math'
+                  ? 'איך פותרים משוואה ריבועית? איך חוקרים פונקציה? צרף תרגיל...'
+                  : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
             }
           />
 

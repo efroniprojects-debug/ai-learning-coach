@@ -15,7 +15,7 @@ export interface SourceChunk {
   source: string;
 }
 
-/** Full structured response from S04 Physics Tutor Engine */
+/** Full structured response from the subject-aware tutor engine. */
 export interface TutorResponse {
   conversationId: string;
   messageId: string;
