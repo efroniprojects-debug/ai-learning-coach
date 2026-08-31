@@ -104,11 +104,26 @@ export function StudioPage() {
     }, STUDIO_TIMEOUT_MS);
     setGenerating(true); setGeneratingTask(task); setLastTask(task); setGenerationStatus('מתחיל לקרוא את המקורות…'); setError(null); setResult('');
     try {
-      const response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
+      const requestBody = JSON.stringify({ task, sources: selectedSources });
+      let response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task, sources: selectedSources }),
+        body: requestBody,
         signal: controller.signal,
       });
+      // Preview deployments may reach the stable backend before its new SSE
+      // route is deployed. Falling back keeps Studio usable during rollout.
+      if (response.status === 404 || response.status === 405) {
+        setGenerationStatus(task === 'practice' ? 'מכין תרגול…' : 'מכין סיכום…');
+        response = await fetch(`${API_BASE}/api/v1/studio/generate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: requestBody,
+          signal: controller.signal,
+        });
+        const legacyData = await response.json() as { content?: string; error?: string };
+        if (!response.ok || !legacyData.content) throw new Error(legacyData.error ?? `HTTP ${response.status}`);
+        setResult(legacyData.content);
+        return;
+      }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
