@@ -104,3 +104,12 @@ textarea:focus {
   border-color: #646cff;
   box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
 }
+
+@media (max-width: 640px) {
+  .calculator-panel {
+    inset: 72px 8px 76px 8px !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 280px;
+  }
+}

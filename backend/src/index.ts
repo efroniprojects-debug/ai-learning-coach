@@ -1,5 +1,13 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import dotenv from 'dotenv';
+
+// Local development runs from /backend. Load local secrets before importing
+// services that read process.env. Existing Railway/Vercel variables win.
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '../.env.local' });
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '../.env' });
 
 const PORT = parseInt(process.env.PORT || '3001');
 const HOST = '0.0.0.0';

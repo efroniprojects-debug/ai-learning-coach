@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
@@ -7,12 +7,16 @@ import { GoogleCallbackPage } from '@/features/auth/pages/GoogleCallbackPage';
 import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspacePage';
 import { UploadPage } from '@/features/knowledge/pages/UploadPage';
 import { PracticePage } from '@/features/practice/pages/PracticePage';
-import { ProgressDashboard } from '@/features/progress/pages/ProgressDashboard';
-import { StudioPage } from '@/features/studio/pages/StudioPage';
 import { BagruyotSidebar } from '@/components/BagruyotSidebar';
 import { ScientificCalculator } from '@/components/calculator/ScientificCalculator';
 
 const queryClient = new QueryClient();
+const ProgressDashboard = lazy(() => import('@/features/progress/pages/ProgressDashboard').then((module) => ({ default: module.ProgressDashboard })));
+const StudioPage = lazy(() => import('@/features/studio/pages/StudioPage').then((module) => ({ default: module.StudioPage })));
+
+function PageLoader() {
+  return <div className="mx-auto mt-12 h-48 max-w-5xl animate-pulse rounded-2xl bg-gray-100 dark:bg-slate-800" aria-label="העמוד נטען" />;
+}
 
 function GlobalHeader({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
   return (
@@ -120,6 +124,7 @@ function DraggableCalculator({ onClose }: { onClose: () => void }) {
   return (
     <div
       ref={panelRef}
+      className="calculator-panel"
       style={{
         position: 'fixed',
         left: pos.x,
@@ -222,8 +227,8 @@ export default function App() {
               <Route path="/ask" element={<ProtectedRoute><Layout><QuestionWorkspacePage /></Layout></ProtectedRoute>} />
               <Route path="/upload" element={<ProtectedRoute><Layout><UploadPage /></Layout></ProtectedRoute>} />
               <Route path="/practice" element={<ProtectedRoute><Layout><PracticePage /></Layout></ProtectedRoute>} />
-              <Route path="/progress" element={<ProtectedRoute><Layout><ProgressDashboard /></Layout></ProtectedRoute>} />
-              <Route path="/studio" element={<ProtectedRoute><Layout><StudioPage /></Layout></ProtectedRoute>} />
+              <Route path="/progress" element={<ProtectedRoute><Layout><Suspense fallback={<PageLoader />}><ProgressDashboard /></Suspense></Layout></ProtectedRoute>} />
+              <Route path="/studio" element={<ProtectedRoute><Layout><Suspense fallback={<PageLoader />}><StudioPage /></Suspense></Layout></ProtectedRoute>} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

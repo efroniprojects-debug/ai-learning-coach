@@ -17,13 +17,17 @@ export function StudioPage() {
   const [aggregating, setAggregating] = useState(false);
   const [aggregateMessage, setAggregateMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const [driveResponse, uploadResponse] = await Promise.all([
           fetch(`${API_BASE}/api/v1/drive/files`), fetch(`${API_BASE}/api/v1/uploads`),
         ]);
+        if (!driveResponse.ok || !uploadResponse.ok) throw new Error('SOURCE_LOAD_FAILED');
         const driveData = await driveResponse.json() as { files?: DriveFile[] };
         const uploadData = await uploadResponse.json() as { uploads?: UploadFile[] };
         const supportedDrive = (driveData.files ?? []).filter((file) => [
@@ -37,7 +41,7 @@ export function StudioPage() {
       finally { setLoading(false); }
     };
     void load();
-  }, []);
+  }, [reloadToken]);
 
   const selectedSources = useMemo(() => sources.filter((source) => selected.has(`${source.kind}:${source.id}`)), [selected, sources]);
   const filteredSources = useMemo(() => {
@@ -124,7 +128,7 @@ export function StudioPage() {
           {generating && <div className="flex h-64 items-center justify-center text-sm text-blue-700"><span className="animate-pulse">SmarterAI מעבד את המקורות…</span></div>}
           {!generating && !result && <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400">התוצר יופיע כאן</div>}
           {result && <div className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{result}</div>}
-          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+          {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p>{error}</p><button type="button" onClick={() => setReloadToken((value) => value + 1)} className="mt-2 rounded-md bg-red-700 px-3 py-2 text-white">נסה שנית</button></div>}
         </section>
       </div>
     </div>

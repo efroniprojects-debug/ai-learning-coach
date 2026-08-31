@@ -56,6 +56,18 @@ export interface TutorFullResponse {
 const MAX_HISTORY_MESSAGES = 6;
 const DB_TIMEOUT_MS = 5_000;
 const GEMINI_TIMEOUT_MS = 90_000;
+const GEMINI_CACHE_TTL_MS = 5 * 60 * 1000;
+const geminiResponseCache = new Map<string, { response: string; expiresAt: number }>();
+
+function getCachedGeminiResponse(key: string): string | null {
+  const cached = geminiResponseCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    geminiResponseCache.delete(key);
+    return null;
+  }
+  return cached.response;
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -205,47 +217,50 @@ export class TutorService {
     // Use generateContent with X-goog-api-key header (supports AQ. format keys)
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent`;
 
-    const geminiRes = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.4,
-        },
-      }),
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-    });
+    // Exact-match, per-user cache. Attachments are excluded to avoid reusing a
+    // response for different binary content with the same filename.
+    const cacheKey = question.imageData || question.documentData
+      ? ''
+      : JSON.stringify({ userId: question.userId, mode: question.mode, topic: question.topic, subtopic: question.subtopic, contents });
+    let fullText = cacheKey ? getCachedGeminiResponse(cacheKey) : null;
 
-    const rawGeminiResponse = await geminiRes.text();
-
-    let geminiData: {
-      error?: { message?: string };
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      promptFeedback?: { blockReason?: string };
-    };
-
-    try {
-      geminiData = JSON.parse(rawGeminiResponse) as typeof geminiData;
-    } catch {
-      throw new Error(`Gemini returned invalid JSON (HTTP ${geminiRes.status})`);
-    }
-
-    if (!geminiRes.ok) {
-      throw new Error(geminiData.error?.message || `Gemini API error: ${geminiRes.status}`);
-    }
-
-    const fullText = geminiData.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? '')
-      .join('')
-      .trim() ?? '';
     if (!fullText) {
-      const blockReason = geminiData.promptFeedback?.blockReason ?? 'none';
-      throw new Error(`Gemini returned empty response (blockReason: ${blockReason})`);
+      const geminiRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.4,
+          },
+        }),
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      });
+
+      const rawGeminiResponse = await geminiRes.text();
+      let geminiData: {
+        error?: { message?: string };
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        promptFeedback?: { blockReason?: string };
+      };
+
+      try {
+        geminiData = JSON.parse(rawGeminiResponse) as typeof geminiData;
+      } catch {
+        throw new Error(`Gemini returned invalid JSON (HTTP ${geminiRes.status})`);
+      }
+      if (!geminiRes.ok) throw new Error(geminiData.error?.message || `Gemini API error: ${geminiRes.status}`);
+
+      fullText = geminiData.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? '';
+      if (!fullText) {
+        const blockReason = geminiData.promptFeedback?.blockReason ?? 'none';
+        throw new Error(`Gemini returned empty response (blockReason: ${blockReason})`);
+      }
+      if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
     }
 
     const structured = this.parseStructuredResponse(fullText);

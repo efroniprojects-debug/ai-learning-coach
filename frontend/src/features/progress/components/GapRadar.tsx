@@ -22,14 +22,14 @@ export function GapRadar({ topics, gaps, hasData }: Props) {
   const polygon = topics.map((topic, index) => point(index, topic.score).join(',')).join(' ');
 
   return (
-    <section className="bg-white rounded-xl shadow p-6 mb-8" dir="rtl">
+    <section className="mb-8 rounded-xl bg-white p-4 shadow sm:p-6" dir="rtl">
       <h2 className="text-2xl font-bold text-gray-900 mb-1">מפת הידע שלי</h2>
       <p className="text-sm text-gray-500 mb-4">תמונה עדכנית של החוזקות והנושאים שכדאי לחזק</p>
       {!hasData ? (
         <div className="py-16 text-center text-gray-500">פתור תרגילים כדי לבנות מפת ידע 🗺️</div>
       ) : (
         <div className="grid lg:grid-cols-2 gap-6 items-center">
-          <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-sm mx-auto" role="img" aria-label="גרף רדאר של השליטה בנושאי הפיזיקה">
+          <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto w-full min-w-[280px] max-w-[320px]" role="img" aria-label="גרף רדאר של השליטה בנושאי הפיזיקה">
             {[20, 40, 60, 80, 100].map((level) => (
               <polygon key={level} points={topics.map((_, index) => point(index, level).join(',')).join(' ')} fill="none" stroke="#e5e7eb" strokeWidth="1" />
             ))}

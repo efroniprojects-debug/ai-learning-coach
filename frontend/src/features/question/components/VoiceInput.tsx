@@ -29,5 +29,5 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
     recognition.start();
   };
 
-  return <button type="button" onClick={toggle} disabled={disabled} className={`rounded-lg border px-3 py-2 text-sm ${listening ? 'border-red-300 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>{listening ? '⏹ עצור הקלטה' : '🎙️ הכתבה בעברית'}</button>;
+  return <button type="button" onClick={toggle} disabled={disabled} className={`min-h-11 touch-manipulation rounded-lg border px-4 py-2 text-sm ${listening ? 'border-red-300 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>{listening ? '⏹ עצור הקלטה' : '🎙️ הכתבה בעברית'}</button>;
 }
