@@ -90,7 +90,7 @@ export function QuestionWorkspacePage() {
       let buffer = '';
       let receivedDone = false;
 
-      while (true) {
+      while (!receivedDone) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });

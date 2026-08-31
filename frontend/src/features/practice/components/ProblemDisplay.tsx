@@ -1,4 +1,5 @@
 import React from 'react';
+import type { PracticeProblem } from '@/services/practice.api';
 
 const CONCEPT_NAMES: Record<string, string> = {
   Force: 'כוח', Acceleration: 'תאוצה', Velocity: 'מהירות', Energy: 'אנרגיה',
@@ -15,7 +16,7 @@ function practiceQuestion(concept: string, difficulty: number): string {
   return `פתור תרגיל ברמת קושי ${difficulty} בנושא ${name}. כתוב מה ידוע, באיזו נוסחה בחרת, את שלבי החישוב ואת התשובה עם יחידות.`;
 }
 
-export function ProblemDisplay({ problem }: { problem: any }) {
+export function ProblemDisplay({ problem }: { problem: PracticeProblem }) {
   return (
     <div className="bg-white rounded-lg shadow p-8 mb-6" dir="rtl">
       <div className="flex items-start justify-between mb-6">

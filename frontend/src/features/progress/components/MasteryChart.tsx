@@ -1,6 +1,7 @@
 import React from 'react';
+import type { MasteryDistribution } from '@/services/progress.api';
 
-export function MasteryChart({ distribution }: { distribution: any }) {
+export function MasteryChart({ distribution }: { distribution: MasteryDistribution }) {
   const total =
     distribution.novice +
     distribution.intermediate +

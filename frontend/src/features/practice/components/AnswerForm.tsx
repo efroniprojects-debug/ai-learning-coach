@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 
 export function AnswerForm({
-  problem,
   onSubmit,
   loading,
 }: {
-  problem: any;
   onSubmit: (answer: string, isCorrect: boolean) => Promise<void>;
   loading: boolean;
 }) {
   const [answer, setAnswer] = useState('');
-  const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async (isCorrect: boolean) => {
-    setSubmitted(true);
     await onSubmit(answer, isCorrect);
   };
 

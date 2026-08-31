@@ -1,6 +1,7 @@
 import React from 'react';
+import type { ProgressStats } from '@/services/progress.api';
 
-export function StatsOverview({ stats }: { stats: any }) {
+export function StatsOverview({ stats }: { stats: ProgressStats }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
       <div className="bg-white rounded-lg shadow p-6">
