@@ -1,10 +1,22 @@
-import axios from 'axios';
 import { apiClient } from '@/services/api.client';
+
+export interface PracticeProblem {
+  conceptId: string;
+  difficulty: number;
+  eloRating: number;
+}
+
+export interface PracticeAttemptResult {
+  eloChange: number;
+  newElo: number;
+  confidenceLevel: string;
+  mastered: boolean;
+}
 
 export const practiceApi = {
   selectProblem: async () => {
     const { data } = await apiClient.get('/api/v1/practice/select-problem');
-    return data;
+    return data as PracticeProblem;
   },
 
   submitAttempt: async (conceptId: string, isCorrect: boolean, timeSpentSeconds: number) => {
@@ -13,7 +25,7 @@ export const practiceApi = {
       isCorrect,
       timeSpentSeconds,
     });
-    return data;
+    return data as PracticeAttemptResult;
   },
 
   getHistory: async () => {

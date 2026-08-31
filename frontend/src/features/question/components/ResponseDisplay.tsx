@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import type { TutorResponse } from '../types';
@@ -52,6 +52,23 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('explanation');
   const [revealedHints, setRevealedHints] = useState(0);
   const [speaking, setSpeaking] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    // A visible clock confirms that the request is still active during long AI calls.
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const timerId = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [isStreaming]);
 
   const toggleSpeech = () => {
     if (!('speechSynthesis' in window)) return;
@@ -85,11 +102,15 @@ export function ResponseDisplay({ response, isStreaming, streamText }: Props) {
       <div className="bg-white border border-gray-200 rounded-xl p-6" dir="rtl">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-sm text-gray-500 font-medium">מורה AI חושב...</span>
+          <span className="text-sm text-gray-500 font-medium">SmarterAI עובד על התשובה</span>
+          <span className="ms-auto text-xs tabular-nums text-gray-400" aria-hidden="true">{elapsedSeconds} שניות</span>
         </div>
-        <div className="text-gray-800 leading-relaxed whitespace-pre-wrap text-sm">
-          {streamText || ''}
+        <div className="text-gray-800 leading-relaxed whitespace-pre-wrap text-sm" role="status" aria-live="polite">
+          {streamText || 'מכין את התשובה...'}
         </div>
+        {elapsedSeconds >= 15 && (
+          <p className="mt-3 text-xs text-blue-600" role="status">זה לוקח מעט יותר זמן, אבל העבודה ממשיכה כרגיל.</p>
+        )}
       </div>
     );
   }

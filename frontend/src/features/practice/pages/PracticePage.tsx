@@ -3,10 +3,20 @@ import { ProblemDisplay } from '@/features/practice/components/ProblemDisplay';
 import { MasteryFeedback } from '@/features/practice/components/MasteryFeedback';
 import { AnswerForm } from '@/features/practice/components/AnswerForm';
 import { practiceApi } from '@/services/practice.api';
+import type { PracticeProblem } from '@/services/practice.api';
+
+interface PracticeFeedback {
+  eloChange: number;
+  newElo: number;
+  confidenceLevel: string;
+  mastered: boolean;
+  submittedAnswer: string;
+  isCorrect: boolean;
+}
 
 export function PracticePage() {
-  const [currentProblem, setCurrentProblem] = useState<any>(null);
-  const [feedback, setFeedback] = useState<any>(null);
+  const [currentProblem, setCurrentProblem] = useState<PracticeProblem | null>(null);
+  const [feedback, setFeedback] = useState<PracticeFeedback | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +50,11 @@ export function PracticePage() {
   };
 
   const handleSubmit = async (answer: string, isCorrect: boolean) => {
+    if (!currentProblem) {
+      setError('לא נמצא תרגיל פעיל');
+      return;
+    }
+
     try {
       setSubmitting(true);
       const result = await practiceApi.submitAttempt(
@@ -96,7 +111,6 @@ export function PracticePage() {
               <>
                 <ProblemDisplay problem={currentProblem} />
                 <AnswerForm
-                  problem={currentProblem}
                   onSubmit={handleSubmit}
                   loading={submitting}
                 />

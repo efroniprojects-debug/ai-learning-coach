@@ -1,6 +1,7 @@
 import React from 'react';
+import type { ConceptMastery } from '@/services/progress.api';
 
-export function WeakAreas({ mastery }: { mastery: any[] }) {
+export function WeakAreas({ mastery }: { mastery: ConceptMastery[] }) {
   if (mastery.length === 0) {
     return null;
   }

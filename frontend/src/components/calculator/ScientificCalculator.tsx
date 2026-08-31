@@ -46,8 +46,6 @@ export function ScientificCalculator() {
   });
   const [showConstants, setShowConstants] = useState(false);
 
-  const updateDisplay = (val: string) => setState(s => ({ ...s, display: val }));
-
   const inputDigit = useCallback((digit: string) => {
     setState(s => {
       if (s.waitingForOperand) return { ...s, display: digit, waitingForOperand: false };

@@ -4,16 +4,28 @@ import { ProgressTimeline } from '@/features/progress/components/ProgressTimelin
 import { WeakAreas } from '@/features/progress/components/WeakAreas';
 import { StatsOverview } from '@/features/progress/components/StatsOverview';
 import { progressApi } from '@/services/progress.api';
+import type {
+  ConceptMastery,
+  ProgressOverview,
+  ProgressSnapshot,
+  ProgressStats,
+} from '@/services/progress.api';
 import { GapRadar } from '@/features/progress/components/GapRadar';
 
+interface GapData {
+  gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
+  topics: Array<{ topic: string; elo: number; score: number }>;
+  hasData: boolean;
+}
+
 export function ProgressDashboard() {
-  const [overview, setOverview] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [mastery, setMastery] = useState<any[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [overview, setOverview] = useState<ProgressOverview | null>(null);
+  const [history, setHistory] = useState<ProgressSnapshot[]>([]);
+  const [mastery, setMastery] = useState<ConceptMastery[]>([]);
+  const [stats, setStats] = useState<ProgressStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [gapData, setGapData] = useState<{ gaps: any[]; topics: any[]; hasData: boolean }>({ gaps: [], topics: [], hasData: false });
+  const [gapData, setGapData] = useState<GapData>({ gaps: [], topics: [], hasData: false });
 
   useEffect(() => {
     loadData();

@@ -1,6 +1,7 @@
 import React from 'react';
+import type { ProgressSnapshot } from '@/services/progress.api';
 
-export function ProgressTimeline({ history }: { history: any[] }) {
+export function ProgressTimeline({ history }: { history: ProgressSnapshot[] }) {
   return (
     <div className="bg-white rounded-lg shadow p-6 mb-8">
       <h3 className="text-lg font-bold mb-6">Last 30 Days</h3>

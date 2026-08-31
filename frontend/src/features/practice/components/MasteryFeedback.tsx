@@ -1,10 +1,19 @@
 import React from 'react';
 
+interface MasteryFeedbackData {
+  isCorrect: boolean;
+  eloChange: number;
+  newElo: number;
+  confidenceLevel: string;
+  mastered: boolean;
+  submittedAnswer: string;
+}
+
 export function MasteryFeedback({
   feedback,
   onNextProblem,
 }: {
-  feedback: any;
+  feedback: MasteryFeedbackData;
   onNextProblem: () => void;
 }) {
   const isCorrect = feedback.isCorrect;

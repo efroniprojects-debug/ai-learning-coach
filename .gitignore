@@ -7,7 +7,7 @@
 node_modules/
 pnpm-lock.yaml
 yarn.lock
-package-lock.json
+# Keep package-lock.json committed so local installs and CI use identical dependencies.
 
 # Build output
 dist/
