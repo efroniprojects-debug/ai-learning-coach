@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { db, conversations, conversationMessages } from '@/db';
-import { eq, asc } from 'drizzle-orm';
+import { db, conversations, conversationMessages, skillMastery } from '@/db';
+import { eq, asc, and, sql } from 'drizzle-orm';
 import { aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt } from '@/config/subjects';
 import type { TutorMode } from '@/config/subjects';
@@ -47,6 +47,7 @@ export interface TutorFullResponse {
   messageId: string;
   sourceChunks: Array<{ id: string; text: string; source: string }>;
   rawText: string;
+  masteryUpdate?: { subtopic: string; previousElo: number; elo: number; confidence: string };
 }
 
 const MAX_HISTORY_MESSAGES = 6;
@@ -115,6 +116,7 @@ export class TutorService {
     });
 
     const structured = this.parseStructuredResponse(aiResponse.content);
+    const masteryUpdate = await this.updateMastery(question, structured);
 
     const [savedAssistantMsg] = await db
       .insert(conversationMessages)
@@ -128,6 +130,7 @@ export class TutorService {
       conversationId: convId,
       messageId: savedAssistantMsg.id,
       rawText: aiResponse.content,
+      masteryUpdate,
       sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
     };
   }
@@ -239,6 +242,7 @@ export class TutorService {
     }
 
     const structured = this.parseStructuredResponse(fullText);
+    const masteryUpdate = await this.updateMastery(question, structured);
 
     let savedMsgId = 'no-db-' + Date.now();
     try {
@@ -261,6 +265,7 @@ export class TutorService {
         conversationId: convId,
         messageId: savedMsgId,
         rawText: fullText,
+        masteryUpdate,
         sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
       },
     };
@@ -316,6 +321,63 @@ export class TutorService {
       .limit(MAX_HISTORY_MESSAGES);
 
     return messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+  }
+
+  private static confidenceForElo(elo: number): string {
+    if (elo >= 1600) return 'expert';
+    if (elo >= 1400) return 'proficient';
+    if (elo >= 1200) return 'intermediate';
+    return 'novice';
+  }
+
+  private static async updateMastery(
+    question: TutorQuestion,
+    structured: TutorStructuredResponse
+  ): Promise<TutorFullResponse['masteryUpdate']> {
+    if (!question.subtopic) return undefined;
+    const hasErrorSignal = question.mode === 'diagnose' || structured.misconceptions.length > 0;
+    const delta = hasErrorSignal ? -30 :
+      (question.mode === 'step_by_step' || question.mode === 'full') ? 20 : 0;
+    if (delta === 0) return undefined;
+
+    try {
+      const existing = await db.query.skillMastery.findFirst({
+        where: and(
+          eq(skillMastery.userId, question.userId),
+          eq(skillMastery.conceptId, question.subtopic)
+        ),
+      });
+      const previousElo = existing?.eloRating ?? 1000;
+      const nextElo = Math.max(400, Math.min(2000, previousElo + delta));
+      const confidence = this.confidenceForElo(nextElo);
+
+      await db.insert(skillMastery).values({
+        userId: question.userId,
+        conceptId: question.subtopic,
+        eloRating: nextElo,
+        attemptsCount: (existing?.attemptsCount ?? 0) + 1,
+        correctAttempts: (existing?.correctAttempts ?? 0) + (delta > 0 ? 1 : 0),
+        lastAttemptedAt: new Date(),
+        confidenceLevel: confidence,
+        updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: [skillMastery.userId, skillMastery.conceptId],
+        set: {
+          eloRating: nextElo,
+          attemptsCount: sql`${skillMastery.attemptsCount} + 1`,
+          correctAttempts: delta > 0
+            ? sql`${skillMastery.correctAttempts} + 1`
+            : sql`${skillMastery.correctAttempts}`,
+          lastAttemptedAt: new Date(),
+          confidenceLevel: confidence,
+          updatedAt: new Date(),
+        },
+      });
+      return { subtopic: question.subtopic, previousElo, elo: nextElo, confidence };
+    } catch (error) {
+      console.warn('Could not update skill mastery:', String(error));
+      return undefined;
+    }
   }
 
   private static buildUserPrompt(

@@ -25,4 +25,13 @@ export const progressApi = {
     const { data } = await apiClient.get('/api/v1/progress/weak-areas');
     return data;
   },
+
+  getGaps: async () => {
+    const { data } = await apiClient.get('/api/v1/progress/gaps');
+    return data as {
+      gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
+      topics: Array<{ topic: string; elo: number; score: number }>;
+      hasData: boolean;
+    };
+  },
 };

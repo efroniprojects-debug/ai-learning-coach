@@ -2,8 +2,42 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authMiddleware } from '@/middleware/auth.middleware';
 import { db, progressSnapshots, skillMastery, practiceAttempts } from '@/db';
 import { eq, desc, and, gte } from 'drizzle-orm';
+import { PHYSICS_TOPIC_TAXONOMY } from '@/config/subjects';
 
 export async function progressRoutes(app: FastifyInstance) {
+  app.get(
+    '/api/v1/progress/gaps',
+    { preHandler: authMiddleware },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+        const mastery = await db.query.skillMastery.findMany({
+          where: eq(skillMastery.userId, request.user.userId),
+        });
+        const bySubtopic = new Map(mastery.map((item) => [item.conceptId, item]));
+        const topics = Object.entries(PHYSICS_TOPIC_TAXONOMY).map(([topic, data]) => {
+          const ratings = data.subtopics.map((subtopic) => bySubtopic.get(subtopic)?.eloRating ?? 1000);
+          const averageElo = Math.round(ratings.reduce((sum, elo) => sum + elo, 0) / ratings.length);
+          return { topic, elo: averageElo, score: Math.max(0, Math.min(100, Math.round(averageElo / 20))) };
+        });
+        const topicForSubtopic = (subtopic: string) =>
+          Object.entries(PHYSICS_TOPIC_TAXONOMY).find(([, data]) => data.subtopics.includes(subtopic))?.[0] ?? 'אחר';
+        const gaps = mastery
+          .filter((item) => (item.eloRating ?? 1000) < 900)
+          .map((item) => ({
+            topic: topicForSubtopic(item.conceptId),
+            subtopic: item.conceptId,
+            elo: item.eloRating ?? 1000,
+            confidence: item.confidenceLevel ?? 'novice',
+          }))
+          .sort((a, b) => a.elo - b.elo);
+        return reply.status(200).send({ gaps, topics, hasData: mastery.length > 0 });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to get knowledge gaps';
+        return reply.status(400).send({ error: message });
+      }
+    }
+  );
   // GET /api/v1/progress/overview
   app.get(
     '/api/v1/progress/overview',

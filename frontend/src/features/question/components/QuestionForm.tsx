@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface QuestionFormProps {
   onSubmit: (text: string) => void | Promise<void>;
   disabled?: boolean;
   placeholder?: string;
+  initialValue?: string;
 }
 
-export function QuestionForm({ onSubmit, disabled, placeholder }: QuestionFormProps) {
+export function QuestionForm({ onSubmit, disabled, placeholder, initialValue = '' }: QuestionFormProps) {
   const [question, setQuestion] = useState('');
+
+  useEffect(() => {
+    if (initialValue) setQuestion(initialValue);
+  }, [initialValue]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

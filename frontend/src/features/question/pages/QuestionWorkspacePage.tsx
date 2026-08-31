@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
 import { ModeSelector } from '../components/ModeSelector';
@@ -14,6 +14,8 @@ type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 export function QuestionWorkspacePage() {
+  const location = useLocation();
+  const routeState = location.state as { prefilledText?: string; selectedTopic?: string; selectedSubtopic?: string } | null;
   const [response, setResponse] = useState<TutorResponse | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -22,11 +24,17 @@ export function QuestionWorkspacePage() {
   const [imageData, setImageData] = useState<string | null>(null);
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [mode, setMode] = useState<Mode>('step_by_step');
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(routeState?.selectedTopic ?? null);
+  const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(routeState?.selectedSubtopic ?? null);
   const [showTopics, setShowTopics] = useState(false);
+  const [celebration, setCelebration] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (routeState?.selectedTopic) setSelectedTopic(routeState.selectedTopic);
+    if (routeState?.selectedSubtopic) setSelectedSubtopic(routeState.selectedSubtopic);
+  }, [routeState?.selectedTopic, routeState?.selectedSubtopic]);
 
   const handleTopicSelect = useCallback((topic: string, subtopic: string) => {
     setSelectedTopic(topic);
@@ -88,12 +96,17 @@ export function QuestionWorkspacePage() {
             // transport representation while it is still being assembled.
             setStreamText('מעבד ומסדר את התשובה...');
           } else if (event.type === 'done') {
-            const d = event as { conversationId: string; messageId: string; structured: TutorResponse; sources: TutorResponse['sources'] };
+            const d = event as { conversationId: string; messageId: string; structured: TutorResponse; sources: TutorResponse['sources']; masteryUpdate?: { subtopic: string; previousElo: number; elo: number; confidence: string } };
             setResponse({ ...d.structured, conversationId: d.conversationId, messageId: d.messageId, sources: d.sources });
             setConversationId(d.conversationId);
             setIsStreaming(false);
             setImageData(null);
             receivedDone = true;
+            if (d.masteryUpdate && d.masteryUpdate.previousElo < 900 && d.masteryUpdate.elo >= 900) {
+              const levels: Record<string, string> = { novice: 'מתחיל', intermediate: 'ביניים', proficient: 'שולט', expert: 'מומחה' };
+              setCelebration(`🎉 שיפרת את ${d.masteryUpdate.subtopic}! רמה: ${levels[d.masteryUpdate.confidence] ?? d.masteryUpdate.confidence}`);
+              window.setTimeout(() => setCelebration(null), 4000);
+            }
           } else if (event.type === 'error') {
             throw new Error((event.message as string) || 'Stream error');
           }
@@ -195,6 +208,7 @@ export function QuestionWorkspacePage() {
           <QuestionForm
             onSubmit={handleSubmitQuestion}
             disabled={isStreaming}
+            initialValue={routeState?.prefilledText}
             placeholder={
               mode === 'diagnose'
                 ? 'שתף את הניסיון שלך (גם אם שגוי) — המורה יאבחן את הטעות...'
@@ -202,6 +216,12 @@ export function QuestionWorkspacePage() {
                 : 'מה זה כוח? מה ההבדל בין מסה למשקל? כדור נזרק...'
             }
           />
+
+          {celebration && (
+            <div className="fixed bottom-6 right-6 z-[9000] max-w-sm rounded-xl bg-green-600 text-white px-5 py-4 shadow-2xl animate-bounce" role="status">
+              {celebration}
+            </div>
+          )}
 
           {/* Image upload */}
           <div className="px-1">

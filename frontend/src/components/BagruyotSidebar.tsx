@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type SeasonMap = Record<string, string[]>;
 type SubjectData = Record<string, SeasonMap>;
@@ -117,6 +118,7 @@ function seasonBadge(season: string) {
 }
 
 export function BagruyotSidebar() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
@@ -128,6 +130,15 @@ export function BagruyotSidebar() {
 
   const toggleYear = (year: string) => {
     setExpandedYear((prev) => (prev === year ? null : year));
+  };
+
+  const askFromExam = (subject: string, year: string, season: string) => {
+    setOpen(false);
+    navigate('/ask', {
+      state: {
+        prefilledText: `אני מתרגל ממבחן בגרות ב${subject}, שנת ${year}, מועד ${season}. עזור לי לפתור שאלה מהמבחן.`,
+      },
+    });
   };
 
   return (
@@ -226,8 +237,13 @@ export function BagruyotSidebar() {
                             </button>
 
                             {isYearOpen && (
-                              <div className="px-8 py-2 bg-indigo-50 flex flex-wrap gap-1.5">
-                                {seasons.map((s) => seasonBadge(s))}
+                              <div className="px-8 py-2 bg-indigo-50 space-y-2">
+                                <div className="flex flex-wrap gap-1.5">{seasons.map((s) => seasonBadge(s))}</div>
+                                {subject === 'פיסיקה' && seasons.map((season) => (
+                                  <button key={`ask-${season}`} onClick={() => askFromExam(subject, year, season)} className="w-full text-xs bg-indigo-600 text-white rounded-md px-2 py-2 hover:bg-indigo-700">
+                                    שאל שאלה ממבחן זה · {season}
+                                  </button>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -243,7 +259,7 @@ export function BagruyotSidebar() {
           {/* Footer note */}
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex-shrink-0">
             <p className="text-xs text-gray-400 text-center">
-              📌 לתזכורת — הבגרויות טרם מחוברות לצ'אטבוט
+              בחר מבחן פיזיקה כדי להתחיל לתרגל
             </p>
           </div>
         </div>

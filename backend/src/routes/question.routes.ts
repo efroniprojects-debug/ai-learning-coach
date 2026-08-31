@@ -182,6 +182,7 @@ export async function questionRoutes(app: FastifyInstance) {
               messageId: event.data.messageId,
               structured: event.data.structured,
               sources: event.data.sourceChunks,
+              masteryUpdate: event.data.masteryUpdate,
             });
           }
         }

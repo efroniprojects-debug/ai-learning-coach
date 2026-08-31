@@ -4,6 +4,7 @@ import { ProgressTimeline } from '@/features/progress/components/ProgressTimelin
 import { WeakAreas } from '@/features/progress/components/WeakAreas';
 import { StatsOverview } from '@/features/progress/components/StatsOverview';
 import { progressApi } from '@/services/progress.api';
+import { GapRadar } from '@/features/progress/components/GapRadar';
 
 export function ProgressDashboard() {
   const [overview, setOverview] = useState<any>(null);
@@ -12,6 +13,7 @@ export function ProgressDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [gapData, setGapData] = useState<{ gaps: any[]; topics: any[]; hasData: boolean }>({ gaps: [], topics: [], hasData: false });
 
   useEffect(() => {
     loadData();
@@ -22,17 +24,19 @@ export function ProgressDashboard() {
       setLoading(true);
       setError(null);
 
-      const [overviewData, historyData, masteryData, statsData] = await Promise.all([
+      const [overviewData, historyData, masteryData, statsData, gapsData] = await Promise.all([
         progressApi.getOverview(),
         progressApi.getHistory(),
         progressApi.getMasteryLevels(),
         progressApi.getStats(),
+        progressApi.getGaps(),
       ]);
 
       setOverview(overviewData);
       setHistory(historyData.snapshots);
       setMastery(masteryData.concepts);
       setStats(statsData.stats);
+      setGapData(gapsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load progress');
     } finally {
@@ -54,13 +58,15 @@ export function ProgressDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">Your Progress</h1>
+        <h1 className="text-4xl font-bold mb-8">ההתקדמות שלי</h1>
 
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
           </div>
         )}
+
+        <GapRadar topics={gapData.topics} gaps={gapData.gaps} hasData={gapData.hasData} />
 
         {/* Quick Stats */}
         {stats && <StatsOverview stats={stats} />}
