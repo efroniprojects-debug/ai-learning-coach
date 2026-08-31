@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { FormattedText } from '@/features/question/components/ResponseDisplay';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
@@ -158,7 +159,8 @@ export function StudioPage() {
             </div>
           )}
           {!generating && !result && <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400">התוצר יופיע כאן</div>}
-          {result && <div className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{result}</div>}
+          {/* Studio returns Markdown and LaTeX, so use the same safe educational formatter as tutor answers. */}
+          {result && <div className="text-sm leading-7 text-gray-800"><FormattedText text={result} /></div>}
           {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p>{error}</p><button type="button" onClick={() => setReloadToken((value) => value + 1)} className="mt-2 rounded-md bg-red-700 px-3 py-2 text-white">נסה שנית</button></div>}
         </section>
       </div>

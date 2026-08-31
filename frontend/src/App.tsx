@@ -25,9 +25,15 @@ function GlobalHeader({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onTog
       <Link to="/dashboard" className="absolute right-3 top-1.5 rounded-lg border border-blue-100 bg-white p-1 shadow dark:border-slate-600 dark:bg-slate-800" aria-label="SmarterAI — דף הבית">
         <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-11 w-11 rounded-md object-cover" />
       </Link>
-      <button onClick={onToggleTheme} className="absolute right-20 top-2.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label={theme === 'light' ? 'עבור למצב כהה' : 'עבור למצב בהיר'}>
-        {theme === 'light' ? '🌙 כהה' : '☀️ בהיר'}
-      </button>
+      {/* Keep global utilities together so they remain easy to find on every page. */}
+      <div className="absolute right-20 top-2.5 flex items-center gap-2" dir="rtl">
+        <button onClick={onToggleTheme} className="flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50 sm:px-3 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label={theme === 'light' ? 'עבור למצב כהה' : 'עבור למצב בהיר'}>
+          <span aria-hidden="true">{theme === 'light' ? '🌙' : '☀️'}</span>
+          <span className="ms-1 hidden sm:inline">{theme === 'light' ? 'כהה' : 'בהיר'}</span>
+        </button>
+        <BagruyotSidebar />
+        <StudentGuide />
+      </div>
     </header>
   );
 }
@@ -186,8 +192,6 @@ function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </nav>
       {children}
-      <BagruyotSidebar />
-
       {/* Calculator toggle button */}
       <button
         onClick={() => setCalcOpen(v => !v)}
@@ -220,7 +224,6 @@ export default function App() {
       <BrowserRouter>
         <div className="flex min-h-screen flex-col bg-white dark:bg-slate-950 dark:text-slate-100">
           <GlobalHeader theme={theme} onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
-          <StudentGuide />
           <main className="flex-1 pt-16">
             <Routes>
               <Route path="/login" element={<LoginPage />} />

@@ -23,7 +23,7 @@ function InlineContent({ text }: { text: string }) {
   })}</>;
 }
 
-function FormattedText({ text }: { text: string }) {
+export function FormattedText({ text }: { text: string }) {
   const lines = text.replace(/\\n/g, '\n').split('\n');
   return (
     <div className="space-y-2">
