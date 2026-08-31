@@ -106,6 +106,29 @@ export const PHYSICS_TOPIC_TAXONOMY: Record<string, TopicData> = {
   },
 };
 
+export const MATH_TOPIC_TAXONOMY: Record<string, TopicData> = {
+  'אלגברה': {
+    icon: '➗',
+    subtopics: ['משוואות ואי־שוויונות', 'חזקות ושורשים', 'פירוק לגורמים', 'סדרות'],
+  },
+  'פונקציות': {
+    icon: '📈',
+    subtopics: ['פונקציה קווית', 'פונקציה ריבועית', 'פונקציות חזקה ושורש', 'חקירת פונקציה'],
+  },
+  'גאומטריה וטריגונומטריה': {
+    icon: '📐',
+    subtopics: ['גאומטריה במישור', 'גאומטריה אנליטית', 'טריגונומטריה', 'וקטורים'],
+  },
+  'חשבון דיפרנציאלי ואינטגרלי': {
+    icon: '∫',
+    subtopics: ['גבולות', 'נגזרות', 'יישומי נגזרת', 'אינטגרלים', 'שטחים'],
+  },
+  'הסתברות וסטטיסטיקה': {
+    icon: '🎲',
+    subtopics: ['הסתברות', 'התפלגות נורמלית', 'סטטיסטיקה תיאורית'],
+  },
+};
+
 // ── PhET Simulations ──────────────────────────────────────────────────────────
 
 export interface PhetSim {
@@ -206,6 +229,35 @@ const BASE_PHYSICS_PROMPT = `אתה פיזיקיו — מורה פרטי לפי�
   "socraticQuestion": "שאלה אחת שמעודדת חשיבה עמוקה ומובילה לתובנה"
 }`;
 
+const BASE_MATH_PROMPT = `אתה מורה פרטי למתמטיקה לתלמידי י'-י"ב בישראל.
+המטרה שלך היא ללמד דרך חשיבה מתמטית מסודרת ולא רק למסור תשובה.
+
+**עקרונות הוראה:**
+1. זהה מה נתון ומה צריך למצוא לפני תחילת החישוב.
+2. הסבר למה בוחרים בכל פעולה או משפט מתמטי.
+3. הצג פתרון שלב־אחר־שלב ובצע בדיקת תשובה בסוף.
+4. כשיש כמה דרכי פתרון, הצג תחילה את הדרך הפשוטה והמתאימה לרמת התלמיד.
+5. הצבע בעדינות על טעויות נפוצות כגון סימנים, תחום הגדרה והצבה.
+6. כתוב תמיד בעברית פשוטה, ברורה וסבלנית.
+
+**כתיבת מתמטיקה:**
+- כתוב נוסחאות כ-LaTeX פשוט בין סימני $ בלבד, לדוגמה $x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$.
+- שמור על כיוון הנוסחאות משמאל לימין ועל המלל בעברית מימין לשמאל.
+- אין להשתמש ב-HTML או בתגיות עיצוב.
+
+**פורמט תגובה — JSON בלבד, ללא מלל מחוץ לאובייקט:**
+{
+  "explanation": "הסבר קצר של הרעיון והגישה",
+  "steps": [
+    { "number": 1, "title": "שם הצעד", "content": "הסבר מפורט עם נוסחאות" }
+  ],
+  "hints": ["רמז ראשון", "רמז מתקדם יותר"],
+  "misconceptions": [
+    { "misconception": "טעות נפוצה", "correction": "הדרך הנכונה" }
+  ],
+  "socraticQuestion": "שאלה קצרה שמקדמת את החשיבה"
+}`;
+
 export const DEFAULT_SUBJECT_ID = 'physics';
 
 export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_SUBJECT_ID): string {
@@ -227,7 +279,19 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     systemPrompt: BASE_PHYSICS_PROMPT,
     topics: Object.keys(PHYSICS_TOPIC_TAXONOMY),
   },
+  math: {
+    id: 'math',
+    name: 'Mathematics',
+    nameHe: 'מתמטיקה',
+    systemPrompt: BASE_MATH_PROMPT,
+    topics: Object.keys(MATH_TOPIC_TAXONOMY),
+  },
 };
+
+export function getSubjectTaxonomy(subjectId: string): Record<string, TopicData> {
+  getSubjectConfig(subjectId);
+  return subjectId === 'math' ? MATH_TOPIC_TAXONOMY : PHYSICS_TOPIC_TAXONOMY;
+}
 
 export function getSubjectConfig(subjectId: string): SubjectConfig {
   const config = SUBJECTS[subjectId];

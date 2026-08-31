@@ -7,6 +7,7 @@ export interface SubjectDefinition {
 
 export const SUBJECTS: Record<string, SubjectDefinition> = {
   physics: { id: 'physics', name: 'Physics', nameHe: 'פיזיקה', icon: '🔬' },
+  math: { id: 'math', name: 'Mathematics', nameHe: 'מתמטיקה', icon: '📐' },
 };
 
 // Step 4 centralizes the active subject. Step 5 can add a selector without

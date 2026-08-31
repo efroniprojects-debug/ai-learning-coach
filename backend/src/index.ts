@@ -245,6 +245,15 @@ async function startServer() {
     return reply.send(PHYSICS_TOPIC_TAXONOMY);
   });
 
+  app.get<{ Params: { subjectId: string } }>('/api/v1/subjects/:subjectId/topics', async (request, reply) => {
+    try {
+      const { getSubjectTaxonomy } = await import('@/config/subjects');
+      return reply.send(getSubjectTaxonomy(request.params.subjectId));
+    } catch (error) {
+      return reply.status(404).send({ error: error instanceof Error ? error.message : 'Subject not found' });
+    }
+  });
+
   app.get('/api/v1/physics/phet', async (request, reply) => {
     const { subtopic } = (request.query as { subtopic?: string });
     const { PHET_SIMULATIONS } = await import('@/config/subjects');
