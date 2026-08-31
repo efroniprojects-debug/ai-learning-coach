@@ -24,6 +24,12 @@ describe('parseTutorStructuredResponse', () => {
     expect(normalizeTutorText('<span class="katex">45 + 40t</span>')).toBe('45 + 40t');
   });
 
+  it('removes accidental Arabic text from Hebrew answers', () => {
+    expect(normalizeTutorText('הפרש המהירויות נשאר ثابت ולכן הוא קבוע')).toBe(
+      'הפרש המהירויות נשאר ולכן הוא קבוע'
+    );
+  });
+
   it('never returns raw JSON when parsing fails', () => {
     const result = parseTutorStructuredResponse('{"explanation":"הסבר נקי","steps": [broken');
     expect(result.explanation).toBe('הסבר נקי');
