@@ -14,6 +14,14 @@ type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
+const STREAM_STAGE_MESSAGES: Record<string, string> = {
+  route_started: 'מתחבר למורה האישי...',
+  rag_started: 'מחפש חומר לימוד רלוונטי...',
+  rag_completed: 'מכין הסבר שמתאים לשאלה...',
+  rag_skipped: 'מכין הסבר על סמך הידע של המורה...',
+  gemini_started: 'בונה את ההסבר שלב אחרי שלב...',
+};
+
 export function QuestionWorkspacePage() {
   const location = useLocation();
   const routeState = location.state as { prefilledText?: string; selectedTopic?: string; selectedSubtopic?: string } | null;
@@ -48,7 +56,7 @@ export function QuestionWorkspacePage() {
     abortRef.current = new AbortController();
     setError(null);
     setIsStreaming(true);
-    setStreamText('');
+    setStreamText('שולח את השאלה...');
     setResponse(null);
 
     const topicPrefix = selectedSubtopic ? `[נושא: ${selectedTopic} → ${selectedSubtopic}]\n` : '';
@@ -96,7 +104,13 @@ export function QuestionWorkspacePage() {
           let event: Record<string, unknown>;
           try { event = JSON.parse(raw); } catch { continue; }
 
-          if (event.type === 'delta') {
+          if (event.type === 'status') {
+            // The backend already reports real work stages; translating them here
+            // reassures the student without inventing progress or changing the API.
+            const stage = typeof event.stage === 'string' ? event.stage : '';
+            const stageMessage = STREAM_STAGE_MESSAGES[stage];
+            if (stageMessage) setStreamText(stageMessage);
+          } else if (event.type === 'delta') {
             // The backend response is structured JSON. Never expose its raw
             // transport representation while it is still being assembled.
             setStreamText('מעבד ומסדר את התשובה...');
