@@ -1,10 +1,14 @@
 import { google, type drive_v3 } from 'googleapis';
 import { eq } from 'drizzle-orm';
+import { Readable } from 'node:stream';
 
 import { db, knowledgeChunks } from '@/db';
 import { ChunkingService } from '@/services/chunking.service';
 
-const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+const DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file',
+];
 
 export interface DriveFileSummary {
   id: string;
@@ -34,6 +38,62 @@ export class DriveService {
 
   static getLastSyncAt(): string | null {
     return this.lastSyncAt;
+  }
+
+  static isWriteConfigured(): boolean {
+    return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_DRIVE_STORAGE_FOLDER_ID);
+  }
+
+  static async saveConversationTranscript(input: {
+    conversationId: string;
+    title: string;
+    question: string;
+    explanation: string;
+    steps: Array<{ number: number; title: string; content: string }>;
+    hints: string[];
+  }): Promise<void> {
+    if (!this.isWriteConfigured()) return;
+    const drive = this.getClient();
+    const folderId = process.env.GOOGLE_DRIVE_STORAGE_FOLDER_ID as string;
+    const safeTitle = input.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 100) || 'שיחה';
+    const content = [
+      `# ${input.title}`,
+      '',
+      `עודכן: ${new Date().toLocaleString('he-IL')}`,
+      '',
+      '## השאלה',
+      input.question,
+      '',
+      '## הסבר',
+      input.explanation,
+      '',
+      '## שלבי הפתרון',
+      ...input.steps.map((step) => `### ${step.number}. ${step.title}\n\n${step.content}`),
+      '',
+      '## רמזים',
+      ...input.hints.map((hint, index) => `${index + 1}. ${hint}`),
+    ].join('\n');
+    const media = { mimeType: 'text/markdown', body: Readable.from([content]) };
+    const escapedId = input.conversationId.replace(/'/g, "\\'");
+    const existing = await drive.files.list({
+      q: `appProperties has { key='conversationId' and value='${escapedId}' } and trashed = false`,
+      fields: 'files(id)',
+      pageSize: 1,
+    });
+    const existingId = existing.data.files?.[0]?.id;
+    if (existingId) {
+      await drive.files.update({ fileId: existingId, requestBody: { name: `${safeTitle}.md` }, media });
+    } else {
+      await drive.files.create({
+        requestBody: {
+          name: `${safeTitle}.md`,
+          parents: [folderId],
+          appProperties: { conversationId: input.conversationId },
+        },
+        media,
+        fields: 'id',
+      });
+    }
   }
 
   private static getClient(): drive_v3.Drive {

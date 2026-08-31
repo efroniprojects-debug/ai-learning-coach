@@ -4,8 +4,8 @@ import { authMiddleware } from '@/middleware/auth.middleware';
 import { QuestionService } from '@/services/question.service';
 import { KnowledgeService } from '@/services/knowledge.service';
 import { TutorService } from '@/services/tutor.service';
-import { db, conversations, conversationMessages } from '@/db';
-import { eq, desc, and, asc } from 'drizzle-orm';
+import { db, conversations, conversationMessages, conversationFolders } from '@/db';
+import { eq, desc, and, asc, ilike, isNull } from 'drizzle-orm';
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 
@@ -195,6 +195,16 @@ export async function questionRoutes(app: FastifyInstance) {
               sources: event.data.sourceChunks,
               masteryUpdate: event.data.masteryUpdate,
             });
+            void import('@/services/drive.service').then(({ DriveService }) =>
+              DriveService.saveConversationTranscript({
+                conversationId: event.data.conversationId,
+                title: body.text.slice(0, 80),
+                question: body.text,
+                explanation: event.data.structured.explanation,
+                steps: event.data.structured.steps,
+                hints: event.data.structured.hints,
+              })
+            ).catch((driveError) => app.log.warn({ driveError }, 'Conversation auto-save to Drive failed'));
           }
         }
       } catch (error) {
@@ -209,28 +219,103 @@ export async function questionRoutes(app: FastifyInstance) {
   );
 
   // GET /api/v1/conversations — list user's conversations
-  app.get(
+  app.get<{ Querystring: { q?: string; folderId?: string } }>(
     '/api/v1/conversations',
     { preHandler: authMiddleware },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request, reply) => {
       if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+
+      const conditions = [eq(conversations.userId, request.user.userId)];
+      const query = request.query.q?.trim();
+      if (query) conditions.push(ilike(conversations.title, `%${query}%`));
+      if (request.query.folderId === 'unfiled') conditions.push(isNull(conversations.folderId));
+      else if (request.query.folderId) conditions.push(eq(conversations.folderId, request.query.folderId));
 
       const convs = await db
         .select({
           id: conversations.id,
           title: conversations.title,
           subject: conversations.subject,
+          folderId: conversations.folderId,
           createdAt: conversations.createdAt,
           updatedAt: conversations.updatedAt,
         })
         .from(conversations)
-        .where(eq(conversations.userId, request.user.userId))
+        .where(and(...conditions))
         .orderBy(desc(conversations.updatedAt))
-        .limit(20);
+        .limit(100);
 
       return reply.status(200).send({ conversations: convs });
     }
   );
+
+  app.get('/api/v1/conversation-folders', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const folders = await db.select().from(conversationFolders)
+      .where(eq(conversationFolders.userId, request.user.userId))
+      .orderBy(asc(conversationFolders.name));
+    return reply.send({ folders });
+  });
+
+  app.post<{ Body: { name: string } }>('/api/v1/conversation-folders', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const name = request.body.name?.trim();
+    if (!name || name.length > 120) return reply.status(400).send({ error: 'שם תיקייה אינו תקין' });
+    try {
+      const [folder] = await db.insert(conversationFolders).values({ userId: request.user.userId, name }).returning();
+      return reply.status(201).send({ folder });
+    } catch {
+      return reply.status(409).send({ error: 'כבר קיימת תיקייה בשם הזה' });
+    }
+  });
+
+  app.patch<{ Params: { folderId: string }; Body: { name: string } }>('/api/v1/conversation-folders/:folderId', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const name = request.body.name?.trim();
+    if (!name || name.length > 120) return reply.status(400).send({ error: 'שם תיקייה אינו תקין' });
+    const [folder] = await db.update(conversationFolders).set({ name, updatedAt: new Date() })
+      .where(and(eq(conversationFolders.id, request.params.folderId), eq(conversationFolders.userId, request.user.userId))).returning();
+    if (!folder) return reply.status(404).send({ error: 'התיקייה לא נמצאה' });
+    return reply.send({ folder });
+  });
+
+  app.delete<{ Params: { folderId: string } }>('/api/v1/conversation-folders/:folderId', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const [folder] = await db.delete(conversationFolders)
+      .where(and(eq(conversationFolders.id, request.params.folderId), eq(conversationFolders.userId, request.user.userId))).returning({ id: conversationFolders.id });
+    if (!folder) return reply.status(404).send({ error: 'התיקייה לא נמצאה' });
+    return reply.status(204).send();
+  });
+
+  app.patch<{ Params: { conversationId: string }; Body: { title?: string; folderId?: string | null } }>('/api/v1/conversations/:conversationId', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const changes: { title?: string; folderId?: string | null; updatedAt: Date } = { updatedAt: new Date() };
+    if (request.body.title !== undefined) {
+      const title = request.body.title.trim();
+      if (!title || title.length > 500) return reply.status(400).send({ error: 'שם השיחה אינו תקין' });
+      changes.title = title;
+    }
+    if (request.body.folderId !== undefined) {
+      if (request.body.folderId) {
+        const [ownedFolder] = await db.select({ id: conversationFolders.id }).from(conversationFolders)
+          .where(and(eq(conversationFolders.id, request.body.folderId), eq(conversationFolders.userId, request.user.userId))).limit(1);
+        if (!ownedFolder) return reply.status(400).send({ error: 'התיקייה לא נמצאה' });
+      }
+      changes.folderId = request.body.folderId;
+    }
+    const [conversation] = await db.update(conversations).set(changes)
+      .where(and(eq(conversations.id, request.params.conversationId), eq(conversations.userId, request.user.userId))).returning();
+    if (!conversation) return reply.status(404).send({ error: 'השיחה לא נמצאה' });
+    return reply.send({ conversation });
+  });
+
+  app.delete<{ Params: { conversationId: string } }>('/api/v1/conversations/:conversationId', { preHandler: authMiddleware }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const [conversation] = await db.delete(conversations)
+      .where(and(eq(conversations.id, request.params.conversationId), eq(conversations.userId, request.user.userId))).returning({ id: conversations.id });
+    if (!conversation) return reply.status(404).send({ error: 'השיחה לא נמצאה' });
+    return reply.status(204).send();
+  });
 
   // GET /api/v1/conversations/:conversationId/messages
   app.get<{ Params: { conversationId: string } }>(

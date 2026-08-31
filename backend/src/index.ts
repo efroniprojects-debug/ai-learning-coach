@@ -12,7 +12,7 @@ async function startServer() {
   await app.register(cors, {
     origin: true,
     credentials: false,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     exposedHeaders: ['Content-Type'],
   });
@@ -34,6 +34,7 @@ async function startServer() {
 
   try {
     const { db, users } = await import('@/db');
+    const { sql } = await import('drizzle-orm');
     // Test the connection with a timeout so slow DB doesn't delay startup
     await Promise.race([
       db.select({ id: users.id }).from(users).limit(1),
@@ -44,6 +45,21 @@ async function startServer() {
       email: 'physiq-local-user@local.invalid',
       displayName: 'PhysIQ Student',
     }).onConflictDoNothing();
+    // Idempotent Sprint 10 schema upgrade. Existing conversations remain
+    // unfiled and deleting a folder never deletes its conversations.
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS conversation_folders (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(120) NOT NULL,
+        created_at TIMESTAMP DEFAULT now() NOT NULL,
+        updated_at TIMESTAMP DEFAULT now() NOT NULL,
+        CONSTRAINT conversation_folders_user_name_unique UNIQUE (user_id, name)
+      );
+    `));
+    await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS conversation_folders_user_id_idx ON conversation_folders(user_id)'));
+    await db.execute(sql.raw('ALTER TABLE conversations ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES conversation_folders(id) ON DELETE SET NULL'));
+    await db.execute(sql.raw('CREATE INDEX IF NOT EXISTS conversations_folder_id_idx ON conversations(folder_id)'));
     dbAvailable = true;
   } catch (e) {
     app.log.warn('Database not available: ' + (e instanceof Error ? e.message : String(e)));

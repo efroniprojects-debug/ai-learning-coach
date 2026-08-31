@@ -39,6 +39,14 @@ export interface ConversationSummary {
   id: string;
   title: string | null;
   subject: string | null;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationFolder {
+  id: string;
+  name: string;
   createdAt: string;
   updatedAt: string;
 }

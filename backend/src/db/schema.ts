@@ -251,6 +251,23 @@ export const progressSnapshots = pgTable(
   }
 );
 
+export const conversationFolders = pgTable(
+  'conversation_folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 120 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table: any) => ({
+    userIdIdx: index('conversation_folders_user_id_idx').on(table.userId),
+    userNameIdx: uniqueIndex('conversation_folders_user_name_idx').on(table.userId, table.name),
+  })
+);
+
 export const conversations = pgTable(
   'conversations',
   {
@@ -260,12 +277,14 @@ export const conversations = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     title: varchar('title', { length: 500 }),
     subject: varchar('subject', { length: 50 }).default('physics'),
+    folderId: uuid('folder_id').references(() => conversationFolders.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table: any) => ({
     userIdIdx: index('conversations_user_id_idx').on(table.userId),
     createdAtIdx: index('conversations_created_at_idx').on(table.createdAt),
+    folderIdIdx: index('conversations_folder_id_idx').on(table.folderId),
   })
 );
 
@@ -309,5 +328,7 @@ export type ProgressSnapshot = typeof progressSnapshots.$inferSelect;
 export type NewProgressSnapshot = typeof progressSnapshots.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;
 export type NewConversation = typeof conversations.$inferInsert;
+export type ConversationFolder = typeof conversationFolders.$inferSelect;
+export type NewConversationFolder = typeof conversationFolders.$inferInsert;
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type NewConversationMessage = typeof conversationMessages.$inferInsert;
