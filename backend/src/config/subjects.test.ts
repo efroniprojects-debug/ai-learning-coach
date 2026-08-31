@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSystemPrompt, DEFAULT_SUBJECT_ID, getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy } from './subjects';
+import { buildSystemPrompt, DEFAULT_SUBJECT_ID, getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy, normalizeStudyUnits } from './subjects';
 
 describe('subject registry', () => {
   it('keeps existing data and prompts on Physics by default', () => {
@@ -19,5 +19,12 @@ describe('subject registry', () => {
     expect(getSubjectTaxonomy('math')).toHaveProperty('אלגברה');
     expect(getSubjectConcepts('math')).toContain('משוואות ואי־שוויונות');
     expect(getSubjectConcepts('math')).not.toContain('Force');
+  });
+
+  it('normalizes study units without creating Physics tracks', () => {
+    expect(normalizeStudyUnits('physics', 5)).toBe(0);
+    expect(normalizeStudyUnits('math')).toBe(5);
+    expect(normalizeStudyUnits('math', 3)).toBe(3);
+    expect(buildSystemPrompt('step_by_step', 'math', 4)).toContain('4 יחידות לימוד');
   });
 });

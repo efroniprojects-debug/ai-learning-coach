@@ -21,4 +21,25 @@ describe('useSelectedSubject', () => {
     act(() => result.current.setSubjectId('chemistry'));
     expect(result.current.subjectId).toBe('physics');
   });
+
+  it('defaults Mathematics to five units and persists another valid level', () => {
+    const { result, unmount } = renderHook(() => useSelectedSubject());
+    expect(result.current.mathStudyUnits).toBe(5);
+
+    act(() => result.current.setMathStudyUnits(4));
+    expect(result.current.mathStudyUnits).toBe(4);
+    unmount();
+
+    const nextPage = renderHook(() => useSelectedSubject());
+    expect(nextPage.result.current.mathStudyUnits).toBe(4);
+  });
+
+  it('synchronizes the learning context across mounted modules', () => {
+    const firstModule = renderHook(() => useSelectedSubject());
+    const secondModule = renderHook(() => useSelectedSubject());
+
+    act(() => firstModule.result.current.setSubjectId('math'));
+
+    expect(secondModule.result.current.subjectId).toBe('math');
+  });
 });

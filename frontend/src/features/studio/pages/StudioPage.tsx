@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FormattedText } from '@/features/question/components/ResponseDisplay';
-import { SubjectSelector } from '@/features/question/components/SubjectSelector';
 import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
+import { LearningContextSummary } from '@/features/subjects/LearningContextSummary';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-const STUDIO_TIMEOUT_MS = 100_000;
+const STUDIO_TIMEOUT_MS = 180_000;
 
 function readableStudioError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
@@ -15,15 +15,34 @@ function readableStudioError(error: unknown): string {
   return 'יצירת התוכן נכשלה. אפשר לנסות שוב עם אותם מקורות.';
 }
 
-interface StudioSource { kind: 'drive' | 'upload'; id: string; name: string; mimeType?: string; }
+export interface StudioSource { kind: 'drive' | 'upload'; id: string; name: string; mimeType?: string; }
 interface DriveFile { id: string; name: string; mimeType: string; }
 interface UploadFile { id: string; fileName: string; mimeType: string; processingStatus: string; }
 
+export function filterStudioSources(
+  sources: StudioSource[],
+  query: string,
+  kind: 'all' | StudioSource['kind'],
+  fileType: 'all' | 'pdf' | 'text',
+): StudioSource[] {
+  const normalized = query.trim().toLocaleLowerCase('he-IL');
+  return sources.filter((source) => {
+    const matchesName = !normalized || source.name.toLocaleLowerCase('he-IL').includes(normalized);
+    const matchesKind = kind === 'all' || source.kind === kind;
+    const isPdf = source.mimeType === 'application/pdf' || source.name.toLocaleLowerCase('he-IL').endsWith('.pdf');
+    const matchesType = fileType === 'all' || (fileType === 'pdf' ? isPdf : !isPdf);
+    return matchesName && matchesKind && matchesType;
+  });
+}
+
 export function StudioPage() {
-  const { subjectId, subject, setSubjectId } = useSelectedSubject();
+  const { subjectId, subject, mathStudyUnits } = useSelectedSubject();
+  const studyUnitsQuery = subjectId === 'math' ? `&studyUnits=${mathStudyUnits}` : '';
   const [sources, setSources] = useState<StudioSource[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sourceQuery, setSourceQuery] = useState('');
+  const [sourceKindFilter, setSourceKindFilter] = useState<'all' | StudioSource['kind']>('all');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<'all' | 'pdf' | 'text'>('all');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -46,7 +65,7 @@ export function StudioPage() {
       try {
         const [driveResponse, uploadResponse] = await Promise.all([
           fetch(`${API_BASE}/api/v1/drive/files?subjectId=${encodeURIComponent(subjectId)}`),
-          fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}`),
+          fetch(`${API_BASE}/api/v1/uploads?subjectId=${encodeURIComponent(subjectId)}${studyUnitsQuery}`),
         ]);
         if (!driveResponse.ok || !uploadResponse.ok) throw new Error('SOURCE_LOAD_FAILED');
         const driveData = await driveResponse.json() as { files?: DriveFile[] };
@@ -62,12 +81,12 @@ export function StudioPage() {
       finally { setLoading(false); }
     };
     void load();
-  }, [reloadToken, subjectId]);
+  }, [mathStudyUnits, reloadToken, studyUnitsQuery, subjectId]);
 
   useEffect(() => {
     setSelected(new Set());
     setResult('');
-  }, [subjectId]);
+  }, [mathStudyUnits, subjectId]);
 
   useEffect(() => {
     if (!generating) {
@@ -87,10 +106,16 @@ export function StudioPage() {
   }, [generating]);
 
   const selectedSources = useMemo(() => sources.filter((source) => selected.has(`${source.kind}:${source.id}`)), [selected, sources]);
-  const filteredSources = useMemo(() => {
-    const normalized = sourceQuery.trim().toLocaleLowerCase('he-IL');
-    return normalized ? sources.filter((source) => source.name.toLocaleLowerCase('he-IL').includes(normalized)) : sources;
-  }, [sourceQuery, sources]);
+  const filteredSources = useMemo(
+    () => filterStudioSources(sources, sourceQuery, sourceKindFilter, sourceTypeFilter),
+    [sourceKindFilter, sourceQuery, sourceTypeFilter, sources],
+  );
+
+  const clearSourceFilters = () => {
+    setSourceQuery('');
+    setSourceKindFilter('all');
+    setSourceTypeFilter('all');
+  };
 
   const toggle = (source: StudioSource) => {
     const key = `${source.kind}:${source.id}`;
@@ -113,7 +138,12 @@ export function StudioPage() {
     }, STUDIO_TIMEOUT_MS);
     setGenerating(true); setGeneratingTask(task); setLastTask(task); setGenerationStatus('מתחיל לקרוא את המקורות…'); setError(null); setResult('');
     try {
-      const requestBody = JSON.stringify({ task, sources: selectedSources, subjectId });
+      const requestBody = JSON.stringify({
+        task,
+        sources: selectedSources,
+        subjectId,
+        studyUnits: subjectId === 'math' ? mathStudyUnits : undefined,
+      });
       let response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: requestBody,
@@ -151,7 +181,7 @@ export function StudioPage() {
           const event = JSON.parse(raw) as { type?: string; stage?: string; completed?: number; total?: number; text?: string; content?: string; message?: string };
           if (event.type === 'status') {
             if (event.stage === 'source_completed') setGenerationStatus(`קורא מקור ${event.completed ?? 0} מתוך ${event.total ?? selectedSources.length}…`);
-            if (event.stage === 'gemini_started') setGenerationStatus(task === 'practice' ? 'בונה שאלות תרגול…' : 'כותב את הסיכום…');
+            if (event.stage === 'ai_started' || event.stage === 'gemini_started') setGenerationStatus(task === 'practice' ? 'בונה שאלות תרגול…' : 'כותב את הסיכום…');
           } else if (event.type === 'delta' && event.text) {
             setResult((current) => current + event.text);
           } else if (event.type === 'done') {
@@ -200,7 +230,7 @@ export function StudioPage() {
         <h1 className="text-3xl font-bold text-gray-900">Studio — {subject.nameHe} {subject.icon}</h1>
         <p className="mt-2 text-sm text-gray-600">בחר חומרי לימוד מ־Drive או מהקבצים שהעלית, וצור מהם סיכום או תרגול מותאם.</p>
       </div>
-      <div className="mb-6"><SubjectSelector value={subjectId} disabled={loading || generating} onChange={setSubjectId} /></div>
+      <LearningContextSummary />
       {subjectId === 'physics' && <section className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
         <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">🌐 עדכון מקורות פיזיקה מאומתים</h2>
         <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">האיסוף מוגבל למשרד החינוך, ראמ״ה, האוניברסיטה הפתוחה ו־Khan Academy.</p>
@@ -214,10 +244,23 @@ export function StudioPage() {
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">מקורות</h2><span className="text-xs text-gray-500">נבחרו {selected.size}/10</span></div>
           <input type="search" value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="🔎 חיפוש מקור לפי שם..." className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+          <div className="mb-3 grid grid-cols-2 gap-2" aria-label="סינון מקורות">
+            <label className="text-xs font-medium text-gray-600">מיקום
+              <select value={sourceKindFilter} onChange={(event) => setSourceKindFilter(event.target.value as 'all' | StudioSource['kind'])} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm">
+                <option value="all">הכול</option><option value="drive">Google Drive</option><option value="upload">העלאה אישית</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-gray-600">סוג קובץ
+              <select value={sourceTypeFilter} onChange={(event) => setSourceTypeFilter(event.target.value as 'all' | 'pdf' | 'text')} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm">
+                <option value="all">הכול</option><option value="pdf">PDF</option><option value="text">טקסט ומסמכים</option>
+              </select>
+            </label>
+          </div>
+          {(sourceQuery || sourceKindFilter !== 'all' || sourceTypeFilter !== 'all') && <button type="button" onClick={clearSourceFilters} className="mb-3 text-xs font-medium text-blue-700 underline">נקה מסננים</button>}
           {loading ? <div className="h-32 animate-pulse rounded bg-gray-100" /> : (
             <div className="max-h-[480px] space-y-2 overflow-y-auto">
               {sources.length === 0 && <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">לא נמצאו מקורות מעובדים. ניתן להוסיף אותם במסך „העלה חומרים”.</p>}
-              {sources.length > 0 && filteredSources.length === 0 && <p className="rounded bg-gray-50 p-3 text-center text-sm text-gray-500">לא נמצאו מקורות התואמים לחיפוש</p>}
+              {sources.length > 0 && filteredSources.length === 0 && <p className="rounded bg-gray-50 p-3 text-center text-sm text-gray-500">לא נמצאו מקורות התואמים למסננים</p>}
               {filteredSources.map((source) => {
                 const key = `${source.kind}:${source.id}`;
                 return <label key={key} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${selected.has(key) ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>

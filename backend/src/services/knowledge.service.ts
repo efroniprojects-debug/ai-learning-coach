@@ -1,6 +1,6 @@
 import { db, knowledgeChunks } from '@/db';
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
-import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, getSubjectConfig, normalizeStudyUnits } from '@/config/subjects';
 import type { KnowledgeChunk } from '@/ai/types';
 
 // Mock knowledge chunks (in production, these would be in vector DB)
@@ -65,9 +65,11 @@ export class KnowledgeService {
   static async searchChunks(
     query: string,
     topK: number = 5,
-    subjectId: string = DEFAULT_SUBJECT_ID
+    subjectId: string = DEFAULT_SUBJECT_ID,
+    studyUnits?: number,
   ): Promise<KnowledgeChunk[]> {
     getSubjectConfig(subjectId);
+    const normalizedUnits = normalizeStudyUnits(subjectId, studyUnits);
     const limit = Math.min(Math.max(topK, 1), 3);
     const keywords = query.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
     const physicsKeywords = keywords.filter((word) =>
@@ -87,7 +89,7 @@ export class KnowledgeService {
         const rows = await db
           .select()
           .from(knowledgeChunks)
-          .where(and(eq(knowledgeChunks.subjectId, subjectId), or(...conditions)))
+          .where(and(eq(knowledgeChunks.subjectId, subjectId), eq(knowledgeChunks.studyUnits, normalizedUnits), or(...conditions)))
           .orderBy(desc(knowledgeChunks.createdAt))
           .limit(limit);
 

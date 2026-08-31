@@ -37,34 +37,34 @@ export interface ProgressStats {
 }
 
 export const progressApi = {
-  getOverview: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/overview', { params: { subjectId } });
+  getOverview: async (subjectId: string, studyUnits?: number) => {
+    const { data } = await apiClient.get('/api/v1/progress/overview', { params: { subjectId, studyUnits } });
     return data as ProgressOverview;
   },
 
-  getHistory: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/history', { params: { subjectId } });
+  getHistory: async (subjectId: string, studyUnits?: number) => {
+    const { data } = await apiClient.get('/api/v1/progress/history', { params: { subjectId, studyUnits } });
     return data as { snapshots: ProgressSnapshot[] };
   },
 
-  getMasteryLevels: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/mastery-levels', { params: { subjectId } });
+  getMasteryLevels: async (subjectId: string, studyUnits?: number) => {
+    const { data } = await apiClient.get('/api/v1/progress/mastery-levels', { params: { subjectId, studyUnits } });
     return data as { concepts: ConceptMastery[] };
   },
 
-  getStats: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/stats', { params: { subjectId } });
+  getStats: async (subjectId: string, studyUnits?: number) => {
+    const { data } = await apiClient.get('/api/v1/progress/stats', { params: { subjectId, studyUnits } });
     return data as { stats: ProgressStats };
   },
 
-  getWeakAreas: async (subjectId: string) => {
-    const { data } = await apiClient.get('/api/v1/progress/weak-areas', { params: { subjectId } });
+  getWeakAreas: async (subjectId: string, studyUnits?: number) => {
+    const { data } = await apiClient.get('/api/v1/progress/weak-areas', { params: { subjectId, studyUnits } });
     return data;
   },
 
-  getGaps: async (subjectId: string) => {
+  getGaps: async (subjectId: string, studyUnits?: number) => {
     try {
-      const { data } = await apiClient.get('/api/v1/progress/gaps', { params: { subjectId } });
+      const { data } = await apiClient.get('/api/v1/progress/gaps', { params: { subjectId, studyUnits } });
       return data as {
         gaps: Array<{ topic: string; subtopic: string; elo: number; confidence: string }>;
         topics: Array<{ topic: string; elo: number; score: number }>;

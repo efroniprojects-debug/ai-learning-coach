@@ -1,6 +1,6 @@
 import { db, uploadedFiles, knowledgeChunks, type UploadedFile } from '@/db';
 import { and, eq, desc } from 'drizzle-orm';
-import { DEFAULT_SUBJECT_ID, getSubjectConfig } from '@/config/subjects';
+import { DEFAULT_SUBJECT_ID, normalizeStudyUnits } from '@/config/subjects';
 import { v4 as uuidv4 } from 'uuid';
 
 const MAX_FILE_SIZE_MB = 50;
@@ -37,14 +37,16 @@ export class UploadService {
     mimeType: string,
     fileSizeBytes: number,
     storageUrl: string,
-    subjectId: string = DEFAULT_SUBJECT_ID
+    subjectId: string = DEFAULT_SUBJECT_ID,
+    studyUnits?: number,
   ) {
-    getSubjectConfig(subjectId);
+    const normalizedUnits = normalizeStudyUnits(subjectId, studyUnits);
     const [uploaded] = await db
       .insert(uploadedFiles)
       .values({
         userId,
         subjectId,
+        studyUnits: normalizedUnits,
         fileName,
         mimeType,
         fileSizeBytes,
@@ -96,10 +98,10 @@ export class UploadService {
   /**
    * List user's uploads
    */
-  static async listUserUploads(userId: string, limit: number = 20, subjectId: string = DEFAULT_SUBJECT_ID) {
-    getSubjectConfig(subjectId);
+  static async listUserUploads(userId: string, limit: number = 20, subjectId: string = DEFAULT_SUBJECT_ID, studyUnits?: number) {
+    const normalizedUnits = normalizeStudyUnits(subjectId, studyUnits);
     const uploads = await db.query.uploadedFiles.findMany({
-      where: and(eq(uploadedFiles.userId, userId), eq(uploadedFiles.subjectId, subjectId)),
+      where: and(eq(uploadedFiles.userId, userId), eq(uploadedFiles.subjectId, subjectId), eq(uploadedFiles.studyUnits, normalizedUnits)),
       orderBy: [desc(uploadedFiles.createdAt)],
       limit,
     });
@@ -122,6 +124,7 @@ export class UploadService {
     return {
       id: upload.id,
       subjectId: upload.subjectId,
+      studyUnits: upload.studyUnits,
       fileName: upload.fileName,
       fileSizeBytes: upload.fileSizeBytes,
       mimeType: upload.mimeType,

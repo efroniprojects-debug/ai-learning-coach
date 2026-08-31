@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react';
+
 import { Upload } from '../types';
 
 interface UploadListProps {
@@ -20,7 +22,20 @@ const STATUS_LABELS = {
   failed: 'כשל',
 };
 
+type UploadStatusFilter = 'all' | Upload['processingStatus'];
+
+export function filterUploads(uploads: Upload[], query: string, status: UploadStatusFilter): Upload[] {
+  const normalized = query.trim().toLocaleLowerCase('he-IL');
+  return uploads.filter((upload) =>
+    (!normalized || upload.fileName.toLocaleLowerCase('he-IL').includes(normalized))
+    && (status === 'all' || upload.processingStatus === status)
+  );
+}
+
 export function UploadList({ uploads, onProcess, onDelete }: UploadListProps) {
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<UploadStatusFilter>('all');
+  const visibleUploads = useMemo(() => filterUploads(uploads, query, status), [query, status, uploads]);
   if (uploads.length === 0) {
     return (
       <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-600">
@@ -32,7 +47,14 @@ export function UploadList({ uploads, onProcess, onDelete }: UploadListProps) {
 
   return (
     <div className="space-y-3">
-      {uploads.map((upload) => (
+      <div className="grid gap-2 sm:grid-cols-[1fr_150px]">
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש קובץ..." aria-label="חיפוש בקבצים שהועלו" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+        <select value={status} onChange={(event) => setStatus(event.target.value as UploadStatusFilter)} aria-label="סינון לפי סטטוס עיבוד" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+          <option value="all">כל הסטטוסים</option><option value="completed">מוכן</option><option value="processing">בעיבוד</option><option value="pending">ממתין</option><option value="failed">נכשל</option>
+        </select>
+      </div>
+      {visibleUploads.length === 0 && <p className="rounded-lg bg-gray-50 p-5 text-center text-sm text-gray-500">לא נמצאו קבצים התואמים למסננים.</p>}
+      {visibleUploads.map((upload) => (
         <div
           key={upload.id}
           className="bg-white border rounded-lg p-4 hover:shadow-md transition"

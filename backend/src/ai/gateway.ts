@@ -1,5 +1,6 @@
 import { ClaudeAdapter } from './adapters/claude.adapter';
-import type { AIAdapter, AIProvider, AIGenerateOptions, AIGenerateResponse } from './types';
+import { GeminiAdapter } from './adapters/gemini.adapter';
+import type { AIAdapter, AIProvider, AIGenerateOptions, AIGenerateResponse, AIStreamChunk } from './types';
 import { AISettingsService } from '@/services/ai-settings.service';
 import { EncryptionService } from '@/services/encryption.service';
 
@@ -25,8 +26,9 @@ export class AIGateway {
           break;
 
         case 'gemini':
-          // TODO: Implement Gemini adapter
-          throw new Error('Gemini adapter not yet implemented');
+          this.adapters.set('gemini', new GeminiAdapter(activeConfig.apiKey, activeConfig.model));
+          this.currentProvider = 'gemini';
+          break;
 
         case 'openai':
           // TODO: Implement OpenAI adapter
@@ -38,6 +40,13 @@ export class AIGateway {
     } catch (error) {
       throw new Error(`Failed to initialize AI gateway: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  initializeWithProvider(provider: AIProvider, apiKey: string, model: string): void {
+    if (provider === 'claude') this.adapters.set(provider, new ClaudeAdapter(apiKey, model));
+    else if (provider === 'gemini') this.adapters.set(provider, new GeminiAdapter(apiKey, model));
+    else throw new Error(`Provider adapter is not implemented: ${provider}`);
+    this.currentProvider = provider;
   }
 
   /**
@@ -57,7 +66,7 @@ export class AIGateway {
    */
   async *generateStream(
     options: AIGenerateOptions
-  ): AsyncGenerator<any, void, unknown> {
+  ): AsyncGenerator<AIStreamChunk, void, unknown> {
     const adapter = this.adapters.get(this.currentProvider);
     if (!adapter) {
       throw new Error('No AI provider configured');

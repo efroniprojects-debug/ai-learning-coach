@@ -259,14 +259,24 @@ const BASE_MATH_PROMPT = `אתה מורה פרטי למתמטיקה לתלמיד
 }`;
 
 export const DEFAULT_SUBJECT_ID = 'physics';
+export type StudyUnits = 0 | 3 | 4 | 5;
 
-export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_SUBJECT_ID): string {
+export function normalizeStudyUnits(subjectId: string, value?: number): StudyUnits {
+  getSubjectConfig(subjectId);
+  if (subjectId !== 'math') return 0;
+  return value === 3 || value === 4 || value === 5 ? value : 5;
+}
+
+export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_SUBJECT_ID, studyUnits?: number): string {
   const subject = getSubjectConfig(subjectId);
   const base = subject.id === 'physics'
     ? process.env.TUTOR_PROMPT_PHYSICS || BASE_PHYSICS_PROMPT
     : subject.systemPrompt;
   const modeKey: TutorMode = mode ?? 'step_by_step';
-  return MODE_PROMPTS[modeKey] + '\n\n' + base;
+  const levelInstruction = subjectId === 'math'
+    ? `\n\nרמת לימוד מחייבת: ${normalizeStudyUnits(subjectId, studyUnits)} יחידות לימוד. התאם את עומק ההסבר, המושגים והתרגילים לרמה זו בלבד.`
+    : '';
+  return MODE_PROMPTS[modeKey] + '\n\n' + base + levelInstruction;
 }
 
 // ── Subject Registry ──────────────────────────────────────────────────────────

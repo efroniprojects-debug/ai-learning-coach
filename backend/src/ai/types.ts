@@ -11,6 +11,7 @@ export interface AIGenerateOptions {
   temperature?: number;
   stream?: boolean;
   systemPrompt?: string;
+  signal?: AbortSignal;
 }
 
 export interface AIGenerateResponse {
