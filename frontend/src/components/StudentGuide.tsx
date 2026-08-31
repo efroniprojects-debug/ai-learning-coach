@@ -190,7 +190,7 @@ export function StudentGuide() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 z-[7900] flex h-14 w-14 touch-manipulation items-center justify-center rounded-full bg-violet-600 text-2xl text-white shadow-xl hover:bg-violet-700 focus:outline-none focus:ring-4 focus:ring-violet-300 sm:bottom-6 sm:right-6"
+        className="flex h-10 w-10 touch-manipulation items-center justify-center rounded-lg border border-violet-500 bg-violet-600 text-lg text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300"
         aria-label="פתיחת מדריך השימוש"
         title="מדריך שימוש וטיפים"
       >

@@ -17,23 +17,28 @@ function InlineContent({ text }: { text: string }) {
       }
     }
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      // Bold labels can contain formulas (for example **מצב $R_1$:**),
+      // so format their inner content instead of exposing LaTeX delimiters.
+      return <strong key={index}><InlineContent text={part.slice(2, -2)} /></strong>;
     }
     return <Fragment key={index}>{part.replace(/(?<!\*)\*(?!\*)/g, '')}</Fragment>;
   })}</>;
 }
 
-function FormattedText({ text }: { text: string }) {
+export function FormattedText({ text }: { text: string }) {
   const lines = text.replace(/\\n/g, '\n').split('\n');
   return (
     <div className="space-y-2">
       {lines.map((rawLine, index) => {
         const line = rawLine.trim();
         if (!line) return <div key={index} className="h-1" aria-hidden="true" />;
+        if (/^---+$/.test(line)) return <hr key={index} className="my-4 border-gray-200" />;
         const heading = line.match(/^#{1,4}\s+(.+)$/);
         if (heading) return <h4 key={index} className="font-bold text-gray-900 mt-4"><InlineContent text={heading[1]} /></h4>;
         const bullet = line.match(/^[-•]\s+(.+)$/);
         if (bullet) return <div key={index} className="flex gap-2"><span aria-hidden="true">•</span><p><InlineContent text={bullet[1]} /></p></div>;
+        const numberedItem = line.match(/^(\d+)[.)]\s+(.+)$/);
+        if (numberedItem) return <div key={index} className="flex items-start gap-2"><span className="min-w-5 font-medium" aria-hidden="true">{numberedItem[1]}.</span><p><InlineContent text={numberedItem[2]} /></p></div>;
         return <p key={index}><InlineContent text={line} /></p>;
       })}
     </div>

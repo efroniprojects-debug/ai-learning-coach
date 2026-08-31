@@ -143,20 +143,22 @@ export function BagruyotSidebar() {
 
   return (
     <>
-      {/* Toggle button — fixed to right edge */}
+      {/* Header-sized trigger keeps this utility aligned with the other global controls. */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed top-1/2 -translate-y-1/2 right-0 bg-indigo-600 text-white text-xs font-bold py-6 px-2 rounded-l-lg shadow-lg hover:bg-indigo-700 transition-colors touch-manipulation"
-        style={{ zIndex: 7000, writingMode: 'vertical-rl', letterSpacing: '0.1em' }}
+        type="button"
+        className="flex h-10 items-center justify-center rounded-lg border border-indigo-500 bg-indigo-600 px-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 sm:px-3"
         aria-label={open ? 'סגור סרגל בגרויות' : 'פתח סרגל בגרויות'}
+        aria-expanded={open}
       >
-        {open ? '◀ סגור' : '▶ בגרויות'}
+        <span aria-hidden="true">📚</span>
+        <span className="ms-1 hidden sm:inline">{open ? 'סגור' : 'בגרויות'}</span>
       </button>
 
       {/* Sidebar panel */}
       {open && (
         <div
-          className="fixed top-0 right-0 h-full w-72 bg-white border-l border-gray-200 shadow-2xl z-40 flex flex-col overflow-hidden"
+          className="fixed right-0 top-16 z-[7500] flex h-[calc(100%-4rem)] w-72 max-w-[90vw] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl"
           dir="rtl"
         >
           {/* Header */}
