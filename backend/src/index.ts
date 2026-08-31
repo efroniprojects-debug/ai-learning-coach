@@ -19,7 +19,7 @@ async function startServer() {
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/', async () => ({
-    name: 'AI Learning Coach Backend',
+    name: 'SmarterAICodex Backend',
     version: '0.3.0',
     status: 'running',
     timestamp: new Date().toISOString(),
@@ -43,7 +43,7 @@ async function startServer() {
     await db.insert(users).values({
       id: '00000000-0000-4000-8000-000000000001',
       email: 'physiq-local-user@local.invalid',
-      displayName: 'PhysIQ Student',
+      displayName: 'SmarterAICodex Student',
     }).onConflictDoNothing();
     // Idempotent Sprint 10 schema upgrade. Existing conversations remain
     // unfiled and deleting a folder never deletes its conversations.
@@ -151,7 +151,7 @@ async function startServer() {
     });
     app.get('/api/v1/auth/verify', async (_req, reply) => {
       // Auth removed — always return local user
-      return reply.status(200).send({ id: '00000000-0000-4000-8000-000000000001', email: 'physiq-local-user@local.invalid', displayName: 'PhysIQ Student' });
+      return reply.status(200).send({ id: '00000000-0000-4000-8000-000000000001', email: 'physiq-local-user@local.invalid', displayName: 'SmarterAICodex Student' });
     });
     app.post('/api/v1/auth/logout', async (_req, reply) => {
       reply.status(200).send({ success: true });
@@ -202,6 +202,8 @@ async function startServer() {
   if (dbAvailable) {
     const { uploadRoutes } = await import('./routes/upload.routes');
     await app.register(uploadRoutes);
+    const { studioRoutes } = await import('./routes/studio.routes');
+    await app.register(studioRoutes);
   }
   const { driveRoutes } = await import('./routes/drive.routes');
   await app.register(driveRoutes);

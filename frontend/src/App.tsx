@@ -8,16 +8,39 @@ import { QuestionWorkspacePage } from '@/features/question/pages/QuestionWorkspa
 import { UploadPage } from '@/features/knowledge/pages/UploadPage';
 import { PracticePage } from '@/features/practice/pages/PracticePage';
 import { ProgressDashboard } from '@/features/progress/pages/ProgressDashboard';
+import { StudioPage } from '@/features/studio/pages/StudioPage';
 import { BagruyotSidebar } from '@/components/BagruyotSidebar';
 import { ScientificCalculator } from '@/components/calculator/ScientificCalculator';
 
 const queryClient = new QueryClient();
 
+function BrandLogo() {
+  return (
+    <Link to="/dashboard" className="fixed right-3 top-3 z-[7600] flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 p-1.5 pl-3 shadow-lg backdrop-blur" aria-label="SmarterAICodex — דף הבית">
+      <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-12 w-12 rounded-lg object-cover" />
+      <span className="hidden text-sm font-bold text-slate-800 sm:block" dir="ltr">SmarterAICodex</span>
+    </Link>
+  );
+}
+
+function SiteFooter() {
+  return (
+    <footer className="mt-10 border-t border-gray-200 bg-slate-50 px-4 py-5" dir="rtl">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-3 text-xs text-gray-600">
+        <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-8 w-8 rounded object-cover" />
+        <span>© {new Date().getFullYear()} Efroni Projects. כל הזכויות שמורות.</span>
+        <span aria-hidden="true">•</span>
+        <a href="mailto:efroniprogects@gmail.com" className="text-blue-700 hover:underline">efroniprogects@gmail.com</a>
+      </div>
+    </footer>
+  );
+}
+
 function DashboardPage() {
   return (
     <div className="max-w-4xl mx-auto py-10 px-4" dir="rtl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-1">פיזיקיו 🔬</h1>
+        <h1 className="text-3xl font-bold mb-1">SmarterAICodex 🔬</h1>
         <p className="text-gray-500 text-sm">מורה פרטי לפיזיקה — בגרות 5 יח"ל</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -40,6 +63,11 @@ function DashboardPage() {
           <div className="text-3xl mb-3">📊</div>
           <h2 className="text-lg font-semibold mb-1">התקדמות</h2>
           <p className="text-gray-500 text-sm">מעקב שליטה ואזורים שצריך לחזק</p>
+        </Link>
+        <Link to="/studio" className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-violet-400 transition-all block sm:col-span-2">
+          <div className="text-3xl mb-3">📚</div>
+          <h2 className="text-lg font-semibold mb-1">Studio</h2>
+          <p className="text-gray-500 text-sm">יצירת סיכומים ושאלות תרגול מחומרי הלימוד שלך</p>
         </Link>
       </div>
     </div>
@@ -169,17 +197,24 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
-          <Route path="/ask" element={<ProtectedRoute><Layout><QuestionWorkspacePage /></Layout></ProtectedRoute>} />
-          <Route path="/upload" element={<ProtectedRoute><Layout><UploadPage /></Layout></ProtectedRoute>} />
-          <Route path="/practice" element={<ProtectedRoute><Layout><PracticePage /></Layout></ProtectedRoute>} />
-          <Route path="/progress" element={<ProtectedRoute><Layout><ProgressDashboard /></Layout></ProtectedRoute>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+        <div className="flex min-h-screen flex-col bg-white">
+          <BrandLogo />
+          <main className="flex-1 pt-16">
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+              <Route path="/dashboard" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
+              <Route path="/ask" element={<ProtectedRoute><Layout><QuestionWorkspacePage /></Layout></ProtectedRoute>} />
+              <Route path="/upload" element={<ProtectedRoute><Layout><UploadPage /></Layout></ProtectedRoute>} />
+              <Route path="/practice" element={<ProtectedRoute><Layout><PracticePage /></Layout></ProtectedRoute>} />
+              <Route path="/progress" element={<ProtectedRoute><Layout><ProgressDashboard /></Layout></ProtectedRoute>} />
+              <Route path="/studio" element={<ProtectedRoute><Layout><StudioPage /></Layout></ProtectedRoute>} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </main>
+          <SiteFooter />
+        </div>
       </BrowserRouter>
     </QueryClientProvider>
   );
