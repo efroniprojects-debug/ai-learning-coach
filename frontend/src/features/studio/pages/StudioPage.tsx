@@ -13,6 +13,8 @@ export function StudioPage() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generatingTask, setGeneratingTask] = useState<'summary' | 'practice' | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [aggregateTopic, setAggregateTopic] = useState('');
   const [aggregating, setAggregating] = useState(false);
   const [aggregateMessage, setAggregateMessage] = useState<string | null>(null);
@@ -43,6 +45,23 @@ export function StudioPage() {
     void load();
   }, [reloadToken]);
 
+  useEffect(() => {
+    if (!generating) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    // Studio requests can take up to 90 seconds, so elapsed time confirms
+    // that the request is still active without claiming backend-only progress.
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const timerId = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [generating]);
+
   const selectedSources = useMemo(() => sources.filter((source) => selected.has(`${source.kind}:${source.id}`)), [selected, sources]);
   const filteredSources = useMemo(() => {
     const normalized = sourceQuery.trim().toLocaleLowerCase('he-IL');
@@ -60,7 +79,7 @@ export function StudioPage() {
 
   const generate = async (task: 'summary' | 'practice') => {
     if (selectedSources.length === 0) { setError('בחר לפחות מקור לימוד אחד'); return; }
-    setGenerating(true); setError(null); setResult('');
+    setGenerating(true); setGeneratingTask(task); setError(null); setResult('');
     try {
       const response = await fetch(`${API_BASE}/api/v1/studio/generate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -70,7 +89,7 @@ export function StudioPage() {
       if (!response.ok || !data.content) throw new Error(data.error ?? 'יצירת התוכן נכשלה');
       setResult(data.content);
     } catch (err) { setError(err instanceof Error ? err.message : 'יצירת התוכן נכשלה'); }
-    finally { setGenerating(false); }
+    finally { setGenerating(false); setGeneratingTask(null); }
   };
 
   const aggregateVerifiedSources = async () => {
@@ -125,7 +144,19 @@ export function StudioPage() {
         </section>
         <section className="min-h-[520px] rounded-xl border border-gray-200 bg-white p-6">
           <h2 className="mb-4 font-semibold text-gray-900">תוצר הלמידה</h2>
-          {generating && <div className="flex h-64 items-center justify-center text-sm text-blue-700"><span className="animate-pulse">SmarterAI מעבד את המקורות…</span></div>}
+          {generating && (
+            <div className="flex h-64 flex-col items-center justify-center gap-3 text-center text-sm text-blue-700">
+              <span className="animate-pulse" role="status" aria-live="polite">
+                {generatingTask === 'practice'
+                  ? 'SmarterAI קורא את המקורות ומכין תרגול…'
+                  : 'SmarterAI קורא את המקורות ומכין סיכום…'}
+              </span>
+              <span className="text-xs tabular-nums text-gray-500" aria-hidden="true">{elapsedSeconds} שניות</span>
+              {elapsedSeconds >= 15 && (
+                <p className="text-xs text-blue-600" role="status">זה לוקח מעט יותר זמן, אבל העבודה ממשיכה כרגיל.</p>
+              )}
+            </div>
+          )}
           {!generating && !result && <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400">התוצר יופיע כאן</div>}
           {result && <div className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{result}</div>}
           {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p>{error}</p><button type="button" onClick={() => setReloadToken((value) => value + 1)} className="mt-2 rounded-md bg-red-700 px-3 py-2 text-white">נסה שנית</button></div>}
