@@ -40,7 +40,12 @@ export function ConversationHistory({ subjectId, activeConversationId, onSelect,
         apiRequest(`/api/v1/conversations${suffix}`), apiRequest('/api/v1/conversation-folders'),
       ]) as [{ conversations?: ConversationSummary[] }, { folders?: ConversationFolder[] }];
       setItems(conversationData.conversations ?? []); setFolders(folderData.folders ?? []);
-    } catch (err) { setError(err instanceof Error ? err.message : 'טעינת השיחות נכשלה'); }
+    } catch {
+      setItems([]);
+      setError(subjectId === 'math'
+        ? 'היסטוריית השיחות במתמטיקה תהיה זמינה לאחר עדכון השרת.'
+        : 'לא ניתן לטעון כרגע את השיחות. אפשר להמשיך לשאול שאלה חדשה.');
+    }
     finally { setLoading(false); }
   }, [folderFilter, query, subjectId]);
 

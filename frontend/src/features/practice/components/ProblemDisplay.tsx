@@ -15,8 +15,9 @@ const MATH_CONCEPT_NAMES: Record<string, string> = {
 };
 
 function practiceQuestion(concept: string, difficulty: number): string {
-  const name = CONCEPT_NAMES[concept] ?? concept;
-  if (concept === 'Force') {
+  const normalizedConcept = Object.keys(CONCEPT_NAMES).find((key) => key.toLowerCase() === concept.toLowerCase());
+  const name = normalizedConcept ? CONCEPT_NAMES[normalizedConcept] : concept;
+  if (normalizedConcept === 'Force') {
     return difficulty <= 2
       ? 'על גוף שמסתו 4 ק״ג פועל כוח שקול של 12 ניוטון. מהי תאוצת הגוף? הצג את הנוסחה ואת דרך החישוב.'
       : 'על גוף שמסתו 8 ק״ג פועלים שני כוחות מנוגדים: 24 ניוטון ימינה ו־8 ניוטון שמאלה. חשב את הכוח השקול ואת תאוצת הגוף, והסבר את כיוון התנועה.';
@@ -30,9 +31,12 @@ function mathPracticeQuestion(concept: string, difficulty: number): string {
 }
 
 export function ProblemDisplay({ problem, subjectId }: { problem: PracticeProblem; subjectId: string }) {
+  const normalizedPhysicsConcept = Object.keys(CONCEPT_NAMES).find(
+    (key) => key.toLowerCase() === problem.conceptId.toLowerCase()
+  );
   const conceptName = subjectId === 'math'
     ? MATH_CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId
-    : CONCEPT_NAMES[problem.conceptId] ?? problem.conceptId;
+    : normalizedPhysicsConcept ? CONCEPT_NAMES[normalizedPhysicsConcept] : problem.conceptId;
   return (
     <div className="bg-white rounded-lg shadow p-8 mb-6" dir="rtl">
       <div className="flex items-start justify-between mb-6">
