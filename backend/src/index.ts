@@ -19,7 +19,7 @@ async function startServer() {
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/', async () => ({
-    name: 'SmarterAICodex Backend',
+    name: 'SmarterAI Backend',
     version: '0.3.0',
     status: 'running',
     timestamp: new Date().toISOString(),
@@ -43,7 +43,7 @@ async function startServer() {
     await db.insert(users).values({
       id: '00000000-0000-4000-8000-000000000001',
       email: 'physiq-local-user@local.invalid',
-      displayName: 'SmarterAICodex Student',
+      displayName: 'SmarterAI Student',
     }).onConflictDoNothing();
     // Idempotent Sprint 10 schema upgrade. Existing conversations remain
     // unfiled and deleting a folder never deletes its conversations.
@@ -151,7 +151,7 @@ async function startServer() {
     });
     app.get('/api/v1/auth/verify', async (_req, reply) => {
       // Auth removed — always return local user
-      return reply.status(200).send({ id: '00000000-0000-4000-8000-000000000001', email: 'physiq-local-user@local.invalid', displayName: 'SmarterAICodex Student' });
+      return reply.status(200).send({ id: '00000000-0000-4000-8000-000000000001', email: 'physiq-local-user@local.invalid', displayName: 'SmarterAI Student' });
     });
     app.post('/api/v1/auth/logout', async (_req, reply) => {
       reply.status(200).send({ success: true });

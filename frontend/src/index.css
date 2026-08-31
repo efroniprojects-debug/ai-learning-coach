@@ -14,6 +14,45 @@
   background-color: #ffffff;
 }
 
+.dark {
+  color-scheme: dark;
+  color: #e5e7eb !important;
+  background-color: #020617 !important;
+}
+
+.dark body,
+.dark #root {
+  background-color: #020617;
+  color: #e5e7eb;
+}
+
+/* Compatibility layer for existing light-first screens. */
+.dark .bg-white { background-color: #0f172a !important; }
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-slate-50 { background-color: #111827 !important; }
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700 { color: #f1f5f9 !important; }
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-gray-400 { color: #cbd5e1 !important; }
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 { border-color: #334155 !important; }
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #1e293b;
+  border-color: #475569;
+  color: #f8fafc;
+}
+.dark .bg-blue-50 { background-color: #172554 !important; }
+.dark .bg-green-50 { background-color: #052e16 !important; }
+.dark .bg-amber-50 { background-color: #451a03 !important; }
+.dark .bg-red-50 { background-color: #450a0a !important; }
+.dark .bg-violet-50 { background-color: #2e1065 !important; }
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

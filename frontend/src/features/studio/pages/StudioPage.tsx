@@ -9,6 +9,7 @@ interface UploadFile { id: string; fileName: string; mimeType: string; processin
 export function StudioPage() {
   const [sources, setSources] = useState<StudioSource[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sourceQuery, setSourceQuery] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -36,6 +37,10 @@ export function StudioPage() {
   }, []);
 
   const selectedSources = useMemo(() => sources.filter((source) => selected.has(`${source.kind}:${source.id}`)), [selected, sources]);
+  const filteredSources = useMemo(() => {
+    const normalized = sourceQuery.trim().toLocaleLowerCase('he-IL');
+    return normalized ? sources.filter((source) => source.name.toLocaleLowerCase('he-IL').includes(normalized)) : sources;
+  }, [sourceQuery, sources]);
 
   const toggle = (source: StudioSource) => {
     const key = `${source.kind}:${source.id}`;
@@ -70,10 +75,12 @@ export function StudioPage() {
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">מקורות</h2><span className="text-xs text-gray-500">נבחרו {selected.size}/10</span></div>
+          <input type="search" value={sourceQuery} onChange={(event) => setSourceQuery(event.target.value)} placeholder="🔎 חיפוש מקור לפי שם..." className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
           {loading ? <div className="h-32 animate-pulse rounded bg-gray-100" /> : (
             <div className="max-h-[480px] space-y-2 overflow-y-auto">
               {sources.length === 0 && <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">לא נמצאו מקורות מעובדים. ניתן להוסיף אותם במסך „העלה חומרים”.</p>}
-              {sources.map((source) => {
+              {sources.length > 0 && filteredSources.length === 0 && <p className="rounded bg-gray-50 p-3 text-center text-sm text-gray-500">לא נמצאו מקורות התואמים לחיפוש</p>}
+              {filteredSources.map((source) => {
                 const key = `${source.kind}:${source.id}`;
                 return <label key={key} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 ${selected.has(key) ? 'border-blue-300 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
                   <input type="checkbox" checked={selected.has(key)} onChange={() => toggle(source)} className="mt-1" />
@@ -89,7 +96,7 @@ export function StudioPage() {
         </section>
         <section className="min-h-[520px] rounded-xl border border-gray-200 bg-white p-6">
           <h2 className="mb-4 font-semibold text-gray-900">תוצר הלמידה</h2>
-          {generating && <div className="flex h-64 items-center justify-center text-sm text-blue-700"><span className="animate-pulse">SmarterAICodex מעבד את המקורות…</span></div>}
+          {generating && <div className="flex h-64 items-center justify-center text-sm text-blue-700"><span className="animate-pulse">SmarterAI מעבד את המקורות…</span></div>}
           {!generating && !result && <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400">התוצר יופיע כאן</div>}
           {result && <div className="whitespace-pre-wrap text-sm leading-7 text-gray-800">{result}</div>}
           {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}

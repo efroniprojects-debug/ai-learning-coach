@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/features/auth/components/ProtectedRoute';
@@ -14,21 +14,25 @@ import { ScientificCalculator } from '@/components/calculator/ScientificCalculat
 
 const queryClient = new QueryClient();
 
-function BrandLogo() {
+function GlobalHeader({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
   return (
-    <Link to="/dashboard" className="fixed right-3 top-3 z-[7600] flex items-center gap-2 rounded-xl border border-blue-100 bg-white/95 p-1.5 pl-3 shadow-lg backdrop-blur" aria-label="SmarterAICodex — דף הבית">
-      <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-12 w-12 rounded-lg object-cover" />
-      <span className="hidden text-sm font-bold text-slate-800 sm:block" dir="ltr">SmarterAICodex</span>
-    </Link>
+    <header className="fixed inset-x-0 top-0 z-[7400] h-16 border-b border-gray-200 bg-white/95 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <Link to="/dashboard" className="absolute right-3 top-1.5 rounded-lg border border-blue-100 bg-white p-1 shadow dark:border-slate-600 dark:bg-slate-800" aria-label="SmarterAI — דף הבית">
+        <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-11 w-11 rounded-md object-cover" />
+      </Link>
+      <button onClick={onToggleTheme} className="absolute right-20 top-2.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700" aria-label={theme === 'light' ? 'עבור למצב כהה' : 'עבור למצב בהיר'}>
+        {theme === 'light' ? '🌙 כהה' : '☀️ בהיר'}
+      </button>
+    </header>
   );
 }
 
 function SiteFooter() {
   return (
-    <footer className="mt-10 border-t border-gray-200 bg-slate-50 px-4 py-5" dir="rtl">
+    <footer className="mt-10 border-t border-gray-200 bg-slate-50 px-4 py-5 dark:border-slate-700 dark:bg-slate-900" dir="rtl">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-3 text-xs text-gray-600">
         <img src="/efroni-projects-logo.png" alt="Efroni Projects" className="h-8 w-8 rounded object-cover" />
-        <span>© {new Date().getFullYear()} Efroni Projects. כל הזכויות שמורות.</span>
+        <span>© 2025 Efroni Projects. כל הזכויות שמורות.</span>
         <span aria-hidden="true">•</span>
         <a href="mailto:efroniprogects@gmail.com" className="text-blue-700 hover:underline">efroniprogects@gmail.com</a>
       </div>
@@ -40,7 +44,7 @@ function DashboardPage() {
   return (
     <div className="max-w-4xl mx-auto py-10 px-4" dir="rtl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-1">SmarterAICodex 🔬</h1>
+        <h1 className="text-3xl font-bold mb-1">SmarterAI 🔬</h1>
         <p className="text-gray-500 text-sm">מורה פרטי לפיזיקה — בגרות 5 יח"ל</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -194,11 +198,22 @@ function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('smarterai-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('smarterai-theme', theme);
+  }, [theme]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <div className="flex min-h-screen flex-col bg-white">
-          <BrandLogo />
+        <div className="flex min-h-screen flex-col bg-white dark:bg-slate-950 dark:text-slate-100">
+          <GlobalHeader theme={theme} onToggleTheme={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
           <main className="flex-1 pt-16">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
