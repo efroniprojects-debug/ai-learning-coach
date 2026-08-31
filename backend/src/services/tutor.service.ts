@@ -95,7 +95,7 @@ export class TutorService {
     ragContext: KnowledgeChunk[]
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
-    const systemPrompt = buildSystemPrompt(question.mode);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -155,7 +155,7 @@ export class TutorService {
     ragContext: KnowledgeChunk[]
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
-    const systemPrompt = buildSystemPrompt(question.mode);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -384,6 +384,7 @@ export class TutorService {
       const existing = await db.query.skillMastery.findFirst({
         where: and(
           eq(skillMastery.userId, question.userId),
+          eq(skillMastery.subjectId, question.subjectId ?? 'physics'),
           eq(skillMastery.conceptId, question.subtopic)
         ),
       });
@@ -393,6 +394,7 @@ export class TutorService {
 
       await db.insert(skillMastery).values({
         userId: question.userId,
+        subjectId: question.subjectId ?? 'physics',
         conceptId: question.subtopic,
         eloRating: nextElo,
         attemptsCount: (existing?.attemptsCount ?? 0) + 1,
@@ -401,7 +403,7 @@ export class TutorService {
         confidenceLevel: confidence,
         updatedAt: new Date(),
       }).onConflictDoUpdate({
-        target: [skillMastery.userId, skillMastery.conceptId],
+        target: [skillMastery.userId, skillMastery.subjectId, skillMastery.conceptId],
         set: {
           eloRating: nextElo,
           attemptsCount: sql`${skillMastery.attemptsCount} + 1`,

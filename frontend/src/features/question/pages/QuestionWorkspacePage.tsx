@@ -9,6 +9,7 @@ import { ImageUpload } from '../components/ImageUpload';
 import { DocumentUpload, type AttachedDocument } from '../components/DocumentUpload';
 import { ConversationHistory } from '../components/ConversationHistory';
 import type { TutorResponse } from '../types';
+import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
 
 type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
@@ -108,7 +109,7 @@ export function QuestionWorkspacePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: topicPrefix + text,
-          subjectId: 'physics',
+          subjectId: DEFAULT_SUBJECT_ID,
           conversationId: isFollowUp ? conversationId : undefined,
           mode,
           topic: selectedTopic ?? undefined,
@@ -232,6 +233,7 @@ export function QuestionWorkspacePage() {
         {/* ── Sidebar: Topic + PhET ── */}
         <div className="lg:col-span-1 space-y-4">
           <ConversationHistory
+            subjectId={DEFAULT_SUBJECT_ID}
             activeConversationId={conversationId}
             onSelect={handleConversationSelect}
             onNew={handleNewConversation}

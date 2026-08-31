@@ -4,7 +4,7 @@ import type { ConversationFolder, ConversationSummary, TutorResponse } from '../
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
-interface Props { activeConversationId: string | null; onSelect: (response: TutorResponse) => void; onNew: () => void; }
+interface Props { subjectId: string; activeConversationId: string | null; onSelect: (response: TutorResponse) => void; onNew: () => void; }
 interface ConversationMessage { id: string; role: 'user' | 'assistant'; structuredData: Omit<TutorResponse, 'conversationId' | 'messageId' | 'sources'> | null; }
 
 async function apiRequest(path: string, options?: RequestInit) {
@@ -20,7 +20,7 @@ async function apiRequest(path: string, options?: RequestInit) {
   return data;
 }
 
-export function ConversationHistory({ activeConversationId, onSelect, onNew }: Props) {
+export function ConversationHistory({ subjectId, activeConversationId, onSelect, onNew }: Props) {
   const [items, setItems] = useState<ConversationSummary[]>([]);
   const [folders, setFolders] = useState<ConversationFolder[]>([]);
   const [query, setQuery] = useState('');
@@ -32,6 +32,7 @@ export function ConversationHistory({ activeConversationId, onSelect, onNew }: P
     setLoading(true); setError(null);
     try {
       const params = new URLSearchParams();
+      params.set('subjectId', subjectId);
       if (query.trim()) params.set('q', query.trim());
       if (folderFilter !== 'all') params.set('folderId', folderFilter);
       const suffix = params.size ? `?${params.toString()}` : '';
@@ -41,7 +42,7 @@ export function ConversationHistory({ activeConversationId, onSelect, onNew }: P
       setItems(conversationData.conversations ?? []); setFolders(folderData.folders ?? []);
     } catch (err) { setError(err instanceof Error ? err.message : 'טעינת השיחות נכשלה'); }
     finally { setLoading(false); }
-  }, [folderFilter, query]);
+  }, [folderFilter, query, subjectId]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 250);

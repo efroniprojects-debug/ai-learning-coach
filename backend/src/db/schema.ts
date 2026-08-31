@@ -108,6 +108,7 @@ export const uploadedFiles = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
     fileName: varchar('file_name', { length: 255 }).notNull(),
     fileSizeBytes: integer('file_size_bytes'),
     mimeType: varchar('mime_type', { length: 100 }),
@@ -121,6 +122,7 @@ export const uploadedFiles = pgTable(
   (table: any) => {
     return {
       userIdIdx: index('uploaded_files_user_id_idx').on(table.userId),
+      userSubjectIdx: index('uploaded_files_user_subject_idx').on(table.userId, table.subjectId),
       statusIdx: index('uploaded_files_status_idx').on(table.processingStatus),
       createdAtIdx: index('uploaded_files_created_at_idx').on(table.createdAt),
     };
@@ -132,6 +134,7 @@ export const knowledgeChunks = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     sourceType: varchar('source_type', { length: 50 }).notNull(),
+    subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
     sourceId: varchar('source_id', { length: 255 }),
     sourceDocumentId: uuid('source_document_id').references(() => uploadedFiles.id, {
       onDelete: 'set null',
@@ -145,6 +148,7 @@ export const knowledgeChunks = pgTable(
   (table: any) => {
     return {
       sourceTypeIdx: index('knowledge_chunks_source_type_idx').on(table.sourceType),
+      subjectIdx: index('knowledge_chunks_subject_idx').on(table.subjectId),
       sourceDocumentIdx: index('knowledge_chunks_source_document_idx').on(
         table.sourceDocumentId
       ),
@@ -160,6 +164,7 @@ export const practiceAttempts = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
     questionId: uuid('question_id').notNull(), // Reference to knowledge chunk or practice problem
     submittedAnswer: text('submitted_answer'),
     isCorrect: boolean('is_correct'),
@@ -171,6 +176,7 @@ export const practiceAttempts = pgTable(
   (table: any) => {
     return {
       userIdIdx: index('practice_attempts_user_id_idx').on(table.userId),
+      userSubjectIdx: index('practice_attempts_user_subject_idx').on(table.userId, table.subjectId),
       questionIdIdx: index('practice_attempts_question_id_idx').on(table.questionId),
       createdAtIdx: index('practice_attempts_created_at_idx').on(table.createdAt),
     };
@@ -184,6 +190,7 @@ export const skillMastery = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
     conceptId: varchar('concept_id', { length: 255 }).notNull(), // Physics concept (force, acceleration, etc.)
     eloRating: integer('elo_rating').default(1000),
     attemptsCount: integer('attempts_count').default(0),
@@ -194,8 +201,9 @@ export const skillMastery = pgTable(
   },
   (table: any) => {
     return {
-      userConceptIdx: uniqueIndex('skill_mastery_user_concept_idx').on(
+      userSubjectConceptIdx: uniqueIndex('skill_mastery_user_subject_concept_idx').on(
         table.userId,
+        table.subjectId,
         table.conceptId
       ),
       eloIdx: index('skill_mastery_elo_idx').on(table.eloRating),
@@ -235,6 +243,7 @@ export const progressSnapshots = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    subjectId: varchar('subject_id', { length: 50 }).notNull().default('physics'),
     date: timestamp('date').notNull(),
     masteryLevels: jsonb('mastery_levels'), // concept_id -> elo_rating
     attemptsToday: integer('attempts_today').default(0),
@@ -245,7 +254,7 @@ export const progressSnapshots = pgTable(
   },
   (table: any) => {
     return {
-      userDateIdx: uniqueIndex('progress_snapshots_user_date_idx').on(table.userId, table.date),
+      userSubjectDateIdx: uniqueIndex('progress_snapshots_user_subject_date_idx').on(table.userId, table.subjectId, table.date),
       userIdIdx: index('progress_snapshots_user_id_idx').on(table.userId),
     };
   }

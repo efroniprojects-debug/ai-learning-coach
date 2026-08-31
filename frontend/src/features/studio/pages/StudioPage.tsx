@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FormattedText } from '@/features/question/components/ResponseDisplay';
+import { DEFAULT_SUBJECT_ID } from '@/config/subjects';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const STUDIO_TIMEOUT_MS = 100_000;
@@ -42,7 +43,7 @@ export function StudioPage() {
       setError(null);
       try {
         const [driveResponse, uploadResponse] = await Promise.all([
-          fetch(`${API_BASE}/api/v1/drive/files`), fetch(`${API_BASE}/api/v1/uploads`),
+          fetch(`${API_BASE}/api/v1/drive/files`), fetch(`${API_BASE}/api/v1/uploads?subjectId=${DEFAULT_SUBJECT_ID}`),
         ]);
         if (!driveResponse.ok || !uploadResponse.ok) throw new Error('SOURCE_LOAD_FAILED');
         const driveData = await driveResponse.json() as { files?: DriveFile[] };
@@ -104,7 +105,7 @@ export function StudioPage() {
     }, STUDIO_TIMEOUT_MS);
     setGenerating(true); setGeneratingTask(task); setLastTask(task); setGenerationStatus('מתחיל לקרוא את המקורות…'); setError(null); setResult('');
     try {
-      const requestBody = JSON.stringify({ task, sources: selectedSources });
+      const requestBody = JSON.stringify({ task, sources: selectedSources, subjectId: DEFAULT_SUBJECT_ID });
       let response = await fetch(`${API_BASE}/api/v1/studio/generate/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: requestBody,
