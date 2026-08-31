@@ -204,6 +204,8 @@ async function startServer() {
     await app.register(uploadRoutes);
     const { studioRoutes } = await import('./routes/studio.routes');
     await app.register(studioRoutes);
+    const { contentRoutes } = await import('./routes/content.routes');
+    await app.register(contentRoutes);
   }
   const { driveRoutes } = await import('./routes/drive.routes');
   await app.register(driveRoutes);

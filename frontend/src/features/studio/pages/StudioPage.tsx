@@ -13,6 +13,9 @@ export function StudioPage() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [aggregateTopic, setAggregateTopic] = useState('');
+  const [aggregating, setAggregating] = useState(false);
+  const [aggregateMessage, setAggregateMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,12 +69,34 @@ export function StudioPage() {
     finally { setGenerating(false); }
   };
 
+  const aggregateVerifiedSources = async () => {
+    const topic = aggregateTopic.trim();
+    if (!topic) { setError('הזן נושא לעדכון המקורות'); return; }
+    setAggregating(true); setError(null); setAggregateMessage(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/content/aggregate?topic=${encodeURIComponent(topic)}`, { method: 'POST' });
+      const data = await response.json() as { sourcesIndexed?: number; chunksCreated?: number; error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'עדכון המקורות נכשל');
+      setAggregateMessage(`עודכנו ${data.sourcesIndexed ?? 0} מקורות מאומתים ונוצרו ${data.chunksCreated ?? 0} קטעי ידע.`);
+    } catch (err) { setError(err instanceof Error ? err.message : 'עדכון המקורות נכשל'); }
+    finally { setAggregating(false); }
+  };
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10" dir="rtl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Studio 📚</h1>
         <p className="mt-2 text-sm text-gray-600">בחר חומרי לימוד מ־Drive או מהקבצים שהעלית, וצור מהם סיכום או תרגול מותאם.</p>
       </div>
+      <section className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+        <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">🌐 עדכון מקורות פיזיקה מאומתים</h2>
+        <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-200">האיסוף מוגבל למשרד החינוך, ראמ״ה, האוניברסיטה הפתוחה ו־Khan Academy.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input value={aggregateTopic} onChange={(event) => setAggregateTopic(event.target.value)} placeholder="לדוגמה: מכניקה" className="min-w-52 flex-1 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm" />
+          <button onClick={() => void aggregateVerifiedSources()} disabled={aggregating || !aggregateTopic.trim()} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50">{aggregating ? 'מעדכן…' : 'עדכן מקורות'}</button>
+        </div>
+        {aggregateMessage && <p className="mt-2 text-xs font-medium text-emerald-800 dark:text-emerald-200">✓ {aggregateMessage}</p>}
+      </section>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">מקורות</h2><span className="text-xs text-gray-500">נבחרו {selected.size}/10</span></div>
