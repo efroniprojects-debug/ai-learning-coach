@@ -5,6 +5,7 @@ import { AIGateway, aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
 import type { TeachingStyle, TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
+import { buildLearningMemoryPrompt, type LearningMemoryInput } from '@/config/learning-memory';
 
 // ── Structured response schema ────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export interface TutorQuestion {
   conversationId?: string;
   mode?: TutorMode;
   teachingStyle?: TeachingStyle;
+  learningMemory?: LearningMemoryInput;
   topic?: string;
   subtopic?: string;
 }
@@ -185,7 +187,8 @@ export class TutorService {
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -249,7 +252,8 @@ export class TutorService {
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -296,6 +300,7 @@ export class TutorService {
         userId: question.userId,
         mode: question.mode,
         teachingStyle: question.teachingStyle,
+        learningMemory: question.learningMemory,
         topic: question.topic,
         subtopic: question.subtopic,
         messages,

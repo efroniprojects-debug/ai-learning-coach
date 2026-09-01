@@ -2,8 +2,10 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
-import { ModeSelector } from '../components/ModeSelector';
+import { ModeSelector, type TutorMode } from '../components/ModeSelector';
 import { TeachingStyleSelector, type TeachingStyle } from '../components/TeachingStyleSelector';
+import { LearningMemoryPanel } from '../components/LearningMemoryPanel';
+import type { LearningMemoryInput } from '@/services/learning-memory.api';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
@@ -13,8 +15,6 @@ import type { TutorResponse } from '../types';
 import { SUBJECTS } from '@/config/subjects';
 import { LearningContextSummary } from '@/features/subjects/LearningContextSummary';
 import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
-
-type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const QUESTION_TIMEOUT_MS = 120_000;
@@ -77,8 +77,9 @@ export function QuestionWorkspacePage() {
   const [imageData, setImageData] = useState<string | null>(null);
   const [document, setDocument] = useState<AttachedDocument | null>(null);
   const [isFollowUp, setIsFollowUp] = useState(false);
-  const [mode, setMode] = useState<Mode>('step_by_step');
+  const [mode, setMode] = useState<TutorMode>('step_by_step');
   const [teachingStyle, setTeachingStyle] = useState<TeachingStyle>(loadTeachingStyle);
+  const [learningMemory, setLearningMemory] = useState<LearningMemoryInput>();
   const [selectedTopic, setSelectedTopic] = useState<string | null>(routeState?.selectedTopic ?? null);
   const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(routeState?.selectedSubtopic ?? null);
   const [celebration, setCelebration] = useState<string | null>(null);
@@ -146,6 +147,7 @@ export function QuestionWorkspacePage() {
           conversationId: isFollowUp ? conversationId : undefined,
           mode,
           teachingStyle,
+          learningMemory,
           topic: selectedTopic ?? undefined,
           subtopic: selectedSubtopic ?? undefined,
           imageData: imageData ?? undefined,
@@ -226,7 +228,7 @@ export function QuestionWorkspacePage() {
       window.clearTimeout(timeoutId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [conversationId, document, imageData, isFollowUp, isStreaming, mathStudyUnits, mode, selectedTopic, selectedSubtopic, subjectId, teachingStyle]);
+  }, [conversationId, document, imageData, isFollowUp, isStreaming, learningMemory, mathStudyUnits, mode, selectedTopic, selectedSubtopic, subjectId, teachingStyle]);
 
   const cancelQuestion = () => {
     abortReasonRef.current = 'user';
@@ -317,6 +319,13 @@ export function QuestionWorkspacePage() {
             />
           </div>
 
+          <LearningMemoryPanel
+            subjectId={subjectId}
+            studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+            disabled={isStreaming}
+            onMemoryChange={setLearningMemory}
+          />
+
           {/* Follow-up */}
           {conversationId && response && (
             <label className="flex items-center gap-3 cursor-pointer p-3 bg-blue-50 border border-blue-200 rounded-xl">
@@ -373,9 +382,10 @@ export function QuestionWorkspacePage() {
               isStreaming
               streamText={streamText}
               onCancel={cancelQuestion}
+              mode={mode}
             />
           ) : response ? (
-            <ResponseDisplay response={response} />
+            <ResponseDisplay response={response} mode={mode} />
           ) : (
             <div className="flex flex-col items-center justify-center h-56 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400">
               <span className="text-4xl mb-3">🎓</span>

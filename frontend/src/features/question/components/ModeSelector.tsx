@@ -1,12 +1,12 @@
-type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
+export type TutorMode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 interface Props {
-  mode: Mode;
-  onChange: (m: Mode) => void;
+  mode: TutorMode;
+  onChange: (m: TutorMode) => void;
   disabled?: boolean;
 }
 
-const MODES: { id: Mode; label: string; emoji: string; tooltip: string }[] = [
+const MODES: { id: TutorMode; label: string; emoji: string; tooltip: string }[] = [
   {
     id: 'step_by_step',
     label: 'שלב-אחר-שלב',

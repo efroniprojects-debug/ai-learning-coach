@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { FormattedText, normalizeMathText, ResponseDisplay } from './ResponseDisplay';
+import { defaultTutorTabForMode, FormattedText, normalizeMathText, ResponseDisplay } from './ResponseDisplay';
 import type { TutorResponse } from '../types';
 
 describe('FormattedText', () => {
@@ -71,5 +71,17 @@ describe('source citations', () => {
   it('states clearly when no retrieved source supported the answer', () => {
     const html = renderToStaticMarkup(<ResponseDisplay response={baseResponse} />);
     expect(html).toContain('לא נמצא מקור לימודי מתאים לשאלה הזאת');
+  });
+});
+
+describe('tutor mode presentation', () => {
+  it('opens guided and full solutions on the required steps', () => {
+    expect(defaultTutorTabForMode('step_by_step')).toBe('steps');
+    expect(defaultTutorTabForMode('full')).toBe('steps');
+  });
+
+  it('opens diagnosis and concept modes on their explanatory feedback', () => {
+    expect(defaultTutorTabForMode('diagnose')).toBe('explanation');
+    expect(defaultTutorTabForMode('concept')).toBe('explanation');
   });
 });
