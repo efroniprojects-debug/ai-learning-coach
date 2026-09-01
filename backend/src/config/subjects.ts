@@ -298,13 +298,18 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
   },
 };
 
-export function getSubjectTaxonomy(subjectId: string): Record<string, TopicData> {
+export function getSubjectTaxonomy(subjectId: string, studyUnits?: number): Record<string, TopicData> {
   getSubjectConfig(subjectId);
-  return subjectId === 'math' ? MATH_TOPIC_TAXONOMY : PHYSICS_TOPIC_TAXONOMY;
+  if (subjectId !== 'math') return PHYSICS_TOPIC_TAXONOMY;
+  const units = normalizeStudyUnits(subjectId, studyUnits) as MathStudyUnits;
+  return Object.fromEntries(Object.entries(getMathCurriculum(units).topics).map(([topic, data]) => [
+    topic,
+    { icon: data.icon, subtopics: data.subtopics },
+  ]));
 }
 
-export function getSubjectConcepts(subjectId: string): string[] {
-  return Object.values(getSubjectTaxonomy(subjectId)).flatMap((topic) => topic.subtopics);
+export function getSubjectConcepts(subjectId: string, studyUnits?: number): string[] {
+  return Object.values(getSubjectTaxonomy(subjectId, studyUnits)).flatMap((topic) => topic.subtopics);
 }
 
 export function getSubjectConfig(subjectId: string): SubjectConfig {
@@ -316,3 +321,4 @@ export function getSubjectConfig(subjectId: string): SubjectConfig {
 export function getSubjectTopics(subjectId: string): string[] {
   return getSubjectConfig(subjectId).topics;
 }
+import { getMathCurriculum, type MathStudyUnits } from './math-curriculum';

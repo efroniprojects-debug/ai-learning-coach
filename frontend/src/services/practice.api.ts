@@ -1,9 +1,18 @@
 import { apiClient } from '@/services/api.client';
 
 export interface PracticeProblem {
+  id: string;
   conceptId: string;
   difficulty: number;
   eloRating: number;
+  question?: string;
+  expectedAnswer?: string;
+  hints: string[];
+  source?: {
+    type: 'original-aligned';
+    curriculumVersion: string;
+    sourceUrl: string;
+  };
 }
 
 export interface PracticeAttemptResult {

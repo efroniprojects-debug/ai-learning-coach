@@ -274,14 +274,23 @@ export function QuestionWorkspacePage() {
             </button>
             {showTopics && (
               <div className="p-3 border-t border-gray-100">
-                <TopicSelector subjectId={subjectId} selectedSubtopic={selectedSubtopic} onSelect={handleTopicSelect} />
+                <TopicSelector
+                  subjectId={subjectId}
+                  studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+                  selectedSubtopic={selectedSubtopic}
+                  onSelect={handleTopicSelect}
+                />
               </div>
             )}
           </div>
 
-          {subjectId === 'physics' && selectedSubtopic && (
+          {selectedSubtopic && (
             <div className="border border-gray-200 rounded-xl p-3">
-              <PhetPanel subtopic={selectedSubtopic} />
+              <PhetPanel
+                subjectId={subjectId}
+                studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+                subtopic={selectedSubtopic}
+              />
             </div>
           )}
         </div>

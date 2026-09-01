@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 
 type SeasonMap = Record<string, string[]>;
 type SubjectData = Record<string, SeasonMap>;
@@ -102,6 +103,23 @@ const EXAM_DATA: SubjectData = {
 };
 
 const SUBJECT_ORDER = ['פיסיקה', 'מתמטיקה', 'הסטוריה', 'אנגלית', 'ספרות', 'תנך', 'אזרחות', 'גאוגרפיה', 'לשון'];
+const NEW_MATH_QUESTIONNAIRES: Record<3 | 4 | 5, string[]> = {
+  3: ['35172', '35173', '35371', '35372'],
+  4: ['35471', '35472'],
+  5: ['35571', '35572'],
+};
+const LEGACY_MATH_QUESTIONNAIRES: Record<3 | 4 | 5, string[]> = {
+  3: ['35381', '35382'],
+  4: ['35481', '35482'],
+  5: ['35581', '35582'],
+};
+
+function mathQuestionnairesForYear(units: 3 | 4 | 5, year: string): string[] {
+  const numericYear = Number(year);
+  return year === 'כללי' || numericYear >= 2024
+    ? NEW_MATH_QUESTIONNAIRES[units]
+    : LEGACY_MATH_QUESTIONNAIRES[units];
+}
 
 const SEASON_COLORS: Record<string, string> = {
   'קיץ': 'bg-yellow-100 text-yellow-800',
@@ -120,9 +138,15 @@ function seasonBadge(season: string) {
 
 export function BagruyotSidebar() {
   const navigate = useNavigate();
+  const { mathStudyUnits, setSubjectId } = useSelectedSubject();
   const [open, setOpen] = useState(false);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
+  const [selectedQuestionnaire, setSelectedQuestionnaire] = useState(NEW_MATH_QUESTIONNAIRES[mathStudyUnits][0]);
+
+  useEffect(() => {
+    setSelectedQuestionnaire(NEW_MATH_QUESTIONNAIRES[mathStudyUnits][0]);
+  }, [mathStudyUnits]);
 
   const toggleSubject = (subject: string) => {
     setExpandedSubject((prev) => (prev === subject ? null : subject));
@@ -134,10 +158,15 @@ export function BagruyotSidebar() {
   };
 
   const askFromExam = (subject: string, year: string, season: string) => {
+    if (subject === 'מתמטיקה') setSubjectId('math');
+    if (subject === 'פיסיקה') setSubjectId('physics');
     setOpen(false);
+    const mathContext = subject === 'מתמטיקה'
+      ? ` ברמת ${mathStudyUnits} יח״ל, שאלון ${selectedQuestionnaire},`
+      : '';
     navigate('/ask', {
       state: {
-        prefilledText: `צור לי שאלת תרגול חדשה המבוססת על מבחן בגרות ב${subject}, שנת ${year}, מועד ${season}. הצג תחילה רק את השאלה, והמתן לתשובה שלי לפני הצגת הפתרון.`,
+        prefilledText: `צור לי שאלת תרגול מקורית הדומה במיומנות — אך אינה העתק — למבחן בגרות ב${subject},${mathContext} שנת ${year}, מועד ${season}. הצג תחילה רק את השאלה, והמתן לתשובה שלי לפני הצגת הפתרון.`,
       },
     });
   };
@@ -224,6 +253,12 @@ export function BagruyotSidebar() {
                   {/* Year list */}
                   {isOpen && (
                     <div className="bg-white border-t border-gray-100 pb-1">
+                      {subject === 'מתמטיקה' && (
+                        <div className="border-b border-indigo-100 bg-emerald-50 px-4 py-3">
+                          <p className="text-xs font-semibold text-emerald-900">מתמטיקה · {mathStudyUnits} יח״ל</p>
+                          <p className="mt-1 text-xs text-emerald-800">מספרי השאלונים יתאימו לשנת המבחן.</p>
+                        </div>
+                      )}
                       {yearKeys.map((year) => {
                         const seasons = years[year];
                         const isYearOpen = expandedYear === `${subject}-${year}`;
@@ -231,7 +266,10 @@ export function BagruyotSidebar() {
                         return (
                           <div key={year} className="border-b border-gray-50 last:border-b-0">
                             <button
-                              onClick={() => toggleYear(`${subject}-${year}`)}
+                              onClick={() => {
+                                toggleYear(`${subject}-${year}`);
+                                if (subject === 'מתמטיקה') setSelectedQuestionnaire(mathQuestionnairesForYear(mathStudyUnits, year)[0]);
+                              }}
                               className={`w-full text-right px-6 py-2.5 flex items-center justify-between text-xs transition-colors ${
                                 isYearOpen
                                   ? 'bg-indigo-50 text-indigo-700 font-semibold'
@@ -245,6 +283,23 @@ export function BagruyotSidebar() {
                             {isYearOpen && (
                               <div className="px-8 py-2 bg-indigo-50 space-y-2">
                                 <div className="flex flex-wrap gap-1.5">{seasons.map((s) => seasonBadge(s))}</div>
+                                {subject === 'מתמטיקה' && (
+                                  <div>
+                                    <p className="mb-1 text-xs text-gray-600">שאלון</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {mathQuestionnairesForYear(mathStudyUnits, year).map((questionnaire) => (
+                                        <button
+                                          key={questionnaire}
+                                          type="button"
+                                          onClick={() => setSelectedQuestionnaire(questionnaire)}
+                                          className={`rounded px-2 py-1 text-xs ${selectedQuestionnaire === questionnaire ? 'bg-emerald-700 text-white' : 'border border-emerald-300 bg-white text-emerald-900'}`}
+                                        >
+                                          {questionnaire}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                                 {seasons.map((season) => (
                                   <button key={`ask-${season}`} onClick={() => askFromExam(subject, year, season)} className="w-full text-xs bg-indigo-600 text-white rounded-md px-2 py-2 hover:bg-indigo-700">
                                     צור שאלת תרגול · {season}

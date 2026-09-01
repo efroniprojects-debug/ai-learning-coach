@@ -18,12 +18,12 @@ export async function progressRoutes(app: FastifyInstance) {
       try {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
         const { subjectId, studyUnits } = getProgressContext(request);
-        const configuredConcepts = new Set(getSubjectConcepts(subjectId));
+        const configuredConcepts = new Set(getSubjectConcepts(subjectId, studyUnits));
         const mastery = (await db.query.skillMastery.findMany({
           where: and(eq(skillMastery.userId, request.user.userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, studyUnits)),
         })).filter((item) => configuredConcepts.has(item.conceptId));
         const bySubtopic = new Map(mastery.map((item) => [item.conceptId, item]));
-        const taxonomy = getSubjectTaxonomy(subjectId);
+        const taxonomy = getSubjectTaxonomy(subjectId, studyUnits);
         const topics = Object.entries(taxonomy).map(([topic, data]) => {
           const ratings = data.subtopics.map((subtopic) => bySubtopic.get(subtopic)?.eloRating ?? 1000);
           const averageElo = Math.round(ratings.reduce((sum, elo) => sum + elo, 0) / ratings.length);

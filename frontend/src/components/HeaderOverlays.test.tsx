@@ -16,6 +16,7 @@ describe('header overlays', () => {
   });
 
   it('renders the exams panel outside the header and exposes practice for every subject', () => {
+    localStorage.setItem('smarterai-math-study-units', '3');
     const { container } = render(
       <MemoryRouter>
         <div><BagruyotSidebar /></div>
@@ -28,6 +29,7 @@ describe('header overlays', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /מתמטיקה/ }));
     fireEvent.click(screen.getByRole('button', { name: /2025/ }));
+    expect(screen.getByRole('button', { name: '35172' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'צור שאלת תרגול · כללי' })).toBeTruthy();
   });
 });

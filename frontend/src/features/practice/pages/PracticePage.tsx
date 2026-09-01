@@ -45,10 +45,6 @@ export function PracticePage() {
       setTimeSpent(0);
 
       const problem = await practiceApi.selectProblem(subjectId, activeStudyUnits);
-      const physicsOnlyConcepts = new Set(['Force', 'Acceleration', 'Velocity', 'Energy', 'Momentum', 'Gravity', 'Waves', 'Electricity']);
-      if (subjectId === 'math' && physicsOnlyConcepts.has(problem.conceptId)) {
-        throw new Error('תרגול המתמטיקה ממתין לעדכון השרת. נתוני הפיזיקה לא יוצגו תחת מתמטיקה.');
-      }
       setCurrentProblem(problem);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'טעינת התרגיל נכשלה');

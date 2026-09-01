@@ -1,6 +1,8 @@
 import { db, skillMastery, practiceAttempts, progressSnapshots } from '@/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { DEFAULT_SUBJECT_ID, getSubjectConcepts, getSubjectConfig, getSubjectTaxonomy, normalizeStudyUnits } from '@/config/subjects';
+import { getMathProblems } from '@/config/math-practice';
+import type { MathStudyUnits } from '@/config/math-curriculum';
 
 /**
  * Practice Service
@@ -68,15 +70,23 @@ export class PracticeService {
     getSubjectConfig(subjectId);
     const normalizedUnits = normalizeStudyUnits(subjectId, studyUnits);
     // Get user's mastery levels
-    const configuredConcepts = new Set(getSubjectConcepts(subjectId));
+    const configuredConcepts = new Set(getSubjectConcepts(subjectId, normalizedUnits));
     let allMastery = (await db.query.skillMastery.findMany({
       where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, normalizedUnits)),
     })).filter((mastery) => configuredConcepts.has(mastery.conceptId));
 
+    if (subjectId === 'math') {
+      const practicedConcepts = [...new Set(getMathProblems(normalizedUnits as MathStudyUnits).map((problem) => problem.conceptId))];
+      const existingConcepts = new Set(allMastery.map((mastery) => mastery.conceptId));
+      for (const conceptId of practicedConcepts.filter((concept) => !existingConcepts.has(concept))) {
+        allMastery.push(await this.getOrCreateMastery(userId, conceptId, subjectId, normalizedUnits));
+      }
+    }
+
     // A new subject starts with its first configured concept so practice is
     // immediately available without mixing mastery data from another subject.
     if (allMastery.length === 0) {
-      const firstTopic = Object.values(getSubjectTaxonomy(subjectId))[0];
+      const firstTopic = Object.values(getSubjectTaxonomy(subjectId, normalizedUnits))[0];
       const firstConcept = firstTopic?.subtopics[0];
       if (!firstConcept) throw new Error('No concepts configured for subject');
       allMastery = [await this.getOrCreateMastery(userId, firstConcept, subjectId, normalizedUnits)];
@@ -97,10 +107,22 @@ export class PracticeService {
       throw new Error('No concepts to practice');
     }
 
+    const difficulty = this.calculateDifficulty(selectedMastery.eloRating ?? 1000);
+    const mathProblems = subjectId === 'math'
+      ? getMathProblems(normalizedUnits as MathStudyUnits, selectedMastery.conceptId)
+      : [];
+    const mathProblem = mathProblems.sort((left, right) =>
+      Math.abs(left.difficulty - difficulty) - Math.abs(right.difficulty - difficulty))[0];
+
     return {
+      id: mathProblem?.id ?? `${subjectId}-${selectedMastery.conceptId}`,
       conceptId: selectedMastery.conceptId,
-      difficulty: this.calculateDifficulty(selectedMastery.eloRating ?? 1000),
+      difficulty,
       eloRating: selectedMastery.eloRating ?? 1000,
+      question: mathProblem?.question,
+      expectedAnswer: mathProblem?.expectedAnswer,
+      hints: mathProblem?.hints ?? [],
+      source: mathProblem?.source,
     };
   }
 
