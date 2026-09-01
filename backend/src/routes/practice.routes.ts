@@ -12,9 +12,9 @@ const submitAttemptSchema = z.object({
 });
 
 export async function practiceRoutes(app: FastifyInstance) {
-  const getContext = (request: FastifyRequest): { subjectId: string; studyUnits?: number } => {
-    const query = request.query as { subjectId?: string; studyUnits?: string };
-    return { subjectId: query.subjectId ?? 'physics', studyUnits: Number(query.studyUnits) || undefined };
+  const getContext = (request: FastifyRequest): { subjectId: string; studyUnits?: number; conceptId?: string } => {
+    const query = request.query as { subjectId?: string; studyUnits?: string; conceptId?: string };
+    return { subjectId: query.subjectId ?? 'physics', studyUnits: Number(query.studyUnits) || undefined, conceptId: query.conceptId?.trim() || undefined };
   };
   // GET /api/v1/practice/next-recommendation
   app.get(
@@ -43,7 +43,7 @@ export async function practiceRoutes(app: FastifyInstance) {
         if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
         const context = getContext(request);
-        const problem = await PracticeService.selectNextProblem(request.user.userId, context.subjectId, context.studyUnits);
+        const problem = await PracticeService.selectNextProblem(request.user.userId, context.subjectId, context.studyUnits, context.conceptId);
         reply.status(200).send(problem);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to select problem';

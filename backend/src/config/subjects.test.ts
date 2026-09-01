@@ -16,9 +16,11 @@ describe('subject registry', () => {
   it('provides a separate Mathematics teacher and topic taxonomy', () => {
     expect(getSubjectConfig('math').nameHe).toBe('מתמטיקה');
     expect(buildSystemPrompt('step_by_step', 'math')).toContain('מורה פרטי למתמטיקה');
-    expect(getSubjectTaxonomy('math')).toHaveProperty('אלגברה');
-    expect(getSubjectConcepts('math')).toContain('משוואות ואי־שוויונות');
-    expect(getSubjectConcepts('math')).not.toContain('Force');
+    expect(getSubjectTaxonomy('math', 3)).toHaveProperty('כלכלה ופיננסים');
+    expect(getSubjectTaxonomy('math', 5)).toHaveProperty('מספרים מרוכבים');
+    expect(getSubjectConcepts('math', 3)).toContain('תכנון ליניארי');
+    expect(getSubjectConcepts('math', 3)).not.toContain('מספרים מרוכבים');
+    expect(getSubjectConcepts('math', 5)).not.toContain('Force');
   });
 
   it('normalizes study units without creating Physics tracks', () => {

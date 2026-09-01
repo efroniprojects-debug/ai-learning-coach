@@ -8,28 +8,22 @@ interface TopicData {
 
 interface Props {
   subjectId: string;
+  studyUnits?: number;
   selectedSubtopic: string | null;
   onSelect: (topic: string, subtopic: string) => void;
 }
 
-const MATH_TOPIC_FALLBACK: Record<string, TopicData> = {
-  'אלגברה': { icon: '➗', subtopics: ['משוואות ואי־שוויונות', 'חזקות ושורשים', 'פירוק לגורמים', 'סדרות'] },
-  'פונקציות': { icon: '📈', subtopics: ['פונקציה קווית', 'פונקציה ריבועית', 'פונקציות חזקה ושורש', 'חקירת פונקציה'] },
-  'גאומטריה וטריגונומטריה': { icon: '📐', subtopics: ['גאומטריה במישור', 'גאומטריה אנליטית', 'טריגונומטריה', 'וקטורים'] },
-  'חשבון דיפרנציאלי ואינטגרלי': { icon: '∫', subtopics: ['גבולות', 'נגזרות', 'יישומי נגזרת', 'אינטגרלים', 'שטחים'] },
-  'הסתברות וסטטיסטיקה': { icon: '🎲', subtopics: ['הסתברות', 'התפלגות נורמלית', 'סטטיסטיקה תיאורית'] },
-};
-
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
-export function TopicSelector({ subjectId, selectedSubtopic, onSelect }: Props) {
+export function TopicSelector({ subjectId, studyUnits, selectedSubtopic, onSelect }: Props) {
   const [openTopic, setOpenTopic] = useState<string | null>(null);
 
   const { data: taxonomy, isLoading, isError } = useQuery<Record<string, TopicData>>({
-    queryKey: ['subject-topics', subjectId],
+    queryKey: ['subject-topics', subjectId, studyUnits],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/v1/subjects/${encodeURIComponent(subjectId)}/topics`);
-      if (!res.ok && subjectId === 'math') return MATH_TOPIC_FALLBACK;
+      const params = new URLSearchParams();
+      if (studyUnits) params.set('studyUnits', String(studyUnits));
+      const res = await fetch(`${API_BASE}/api/v1/subjects/${encodeURIComponent(subjectId)}/topics?${params}`);
       if (!res.ok && subjectId === 'physics') {
         const legacyResponse = await fetch(`${API_BASE}/api/v1/physics/topics`);
         if (legacyResponse.ok) return legacyResponse.json() as Promise<Record<string, TopicData>>;

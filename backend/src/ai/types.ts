@@ -12,6 +12,7 @@ export interface AIGenerateOptions {
   stream?: boolean;
   systemPrompt?: string;
   signal?: AbortSignal;
+  attachments?: Array<{ mimeType: string; data: string }>;
 }
 
 export interface AIGenerateResponse {

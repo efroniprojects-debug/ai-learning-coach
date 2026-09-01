@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { VoiceInput } from './VoiceInput';
 
 interface QuestionFormProps {
@@ -6,9 +6,10 @@ interface QuestionFormProps {
   disabled?: boolean;
   placeholder?: string;
   initialValue?: string;
+  attachments?: ReactNode;
 }
 
-export function QuestionForm({ onSubmit, disabled, placeholder, initialValue = '' }: QuestionFormProps) {
+export function QuestionForm({ onSubmit, disabled, placeholder, initialValue = '', attachments }: QuestionFormProps) {
   const [question, setQuestion] = useState('');
 
   useEffect(() => {
@@ -37,10 +38,13 @@ export function QuestionForm({ onSubmit, disabled, placeholder, initialValue = '
         className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
       />
 
-      <VoiceInput
-        disabled={disabled}
-        onTranscript={(text) => setQuestion((current) => current ? `${current} ${text}` : text)}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <VoiceInput
+          disabled={disabled}
+          onTranscript={(text) => setQuestion((current) => current ? `${current} ${text}` : text)}
+        />
+        {attachments}
+      </div>
 
       <button
         type="submit"

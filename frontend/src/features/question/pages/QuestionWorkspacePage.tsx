@@ -73,7 +73,6 @@ export function QuestionWorkspacePage() {
   const [mode, setMode] = useState<Mode>('step_by_step');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(routeState?.selectedTopic ?? null);
   const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(routeState?.selectedSubtopic ?? null);
-  const [showTopics, setShowTopics] = useState(false);
   const [celebration, setCelebration] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -262,26 +261,27 @@ export function QuestionWorkspacePage() {
             onSelect={handleConversationSelect}
             onNew={handleNewConversation}
           />
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <button
-              onClick={() => setShowTopics(!showTopics)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-            >
-              <span className="font-medium text-gray-800 text-sm">
-                📚 {selectedSubtopic ? selectedSubtopic : 'בחר נושא'}
-              </span>
-              <span className="text-gray-400 text-xs">{showTopics ? '▲' : '▼'}</span>
-            </button>
-            {showTopics && (
-              <div className="p-3 border-t border-gray-100">
-                <TopicSelector subjectId={subjectId} selectedSubtopic={selectedSubtopic} onSelect={handleTopicSelect} />
-              </div>
-            )}
+          <div className="overflow-hidden rounded-xl border border-gray-200">
+            <div className="bg-gray-50 px-4 py-3 font-medium text-gray-800 text-sm">
+              📚 בחר נושא
+            </div>
+            <div className="border-t border-gray-100 p-3">
+              <TopicSelector
+                subjectId={subjectId}
+                studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+                selectedSubtopic={selectedSubtopic}
+                onSelect={handleTopicSelect}
+              />
+            </div>
           </div>
 
-          {subjectId === 'physics' && selectedSubtopic && (
+          {selectedSubtopic && (
             <div className="border border-gray-200 rounded-xl p-3">
-              <PhetPanel subtopic={selectedSubtopic} />
+              <PhetPanel
+                subjectId={subjectId}
+                studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+                subtopic={selectedSubtopic}
+              />
             </div>
           )}
         </div>
@@ -310,6 +310,14 @@ export function QuestionWorkspacePage() {
             onSubmit={handleSubmitQuestion}
             disabled={isStreaming}
             initialValue={routeState?.prefilledText}
+            attachments={(
+              <>
+                <ImageUpload onImage={setImageData} disabled={isStreaming || Boolean(document)} />
+                <DocumentUpload onDocument={setDocument} disabled={isStreaming || Boolean(imageData)} />
+                {imageData && <span className="text-xs text-blue-600">📷 התמונה מוכנה</span>}
+                {document && <span className="text-xs text-violet-700">📄 המסמך מוכן</span>}
+              </>
+            )}
             placeholder={
               mode === 'diagnose'
                 ? 'שתף את הניסיון שלך (גם אם שגוי) — המורה יאבחן את הטעות...'
@@ -325,18 +333,6 @@ export function QuestionWorkspacePage() {
               {celebration}
             </div>
           )}
-
-          {/* Attachments */}
-          <div className="flex flex-wrap items-start gap-3 px-1">
-            <ImageUpload onImage={setImageData} disabled={isStreaming || Boolean(document)} />
-            <DocumentUpload onDocument={setDocument} disabled={isStreaming || Boolean(imageData)} />
-            {imageData && (
-              <p className="w-full text-xs text-blue-600">📷 התמונה תישלח לניתוח עם השאלה</p>
-            )}
-            {document && (
-              <p className="w-full text-xs text-violet-700">📄 המסמך ייקרא וינותח יחד עם השאלה</p>
-            )}
-          </div>
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">

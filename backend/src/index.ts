@@ -250,10 +250,11 @@ async function startServer() {
     return reply.send(PHYSICS_TOPIC_TAXONOMY);
   });
 
-  app.get<{ Params: { subjectId: string } }>('/api/v1/subjects/:subjectId/topics', async (request, reply) => {
+  app.get<{ Params: { subjectId: string }; Querystring: { studyUnits?: string } }>('/api/v1/subjects/:subjectId/topics', async (request, reply) => {
     try {
-      const { getSubjectTaxonomy } = await import('@/config/subjects');
-      return reply.send(getSubjectTaxonomy(request.params.subjectId));
+      const { getSubjectTaxonomy, normalizeStudyUnits } = await import('@/config/subjects');
+      const units = normalizeStudyUnits(request.params.subjectId, Number(request.query.studyUnits));
+      return reply.send(getSubjectTaxonomy(request.params.subjectId, units));
     } catch (error) {
       return reply.status(404).send({ error: error instanceof Error ? error.message : 'Subject not found' });
     }
@@ -264,6 +265,31 @@ async function startServer() {
     const { PHET_SIMULATIONS } = await import('@/config/subjects');
     if (!subtopic) return reply.send(PHET_SIMULATIONS);
     return reply.send(PHET_SIMULATIONS[subtopic] ?? []);
+  });
+
+  app.get<{ Params: { subjectId: string }; Querystring: { studyUnits?: string; topic?: string } }>(
+    '/api/v1/subjects/:subjectId/simulations',
+    async (request, reply) => {
+      if (request.params.subjectId !== 'math') return reply.send([]);
+      const { normalizeStudyUnits } = await import('@/config/subjects');
+      const { getMathSimulations } = await import('@/config/simulations');
+      const units = normalizeStudyUnits('math', Number(request.query.studyUnits));
+      return reply.send(getMathSimulations(units as 3 | 4 | 5, request.query.topic));
+    }
+  );
+
+  app.get<{ Querystring: { studyUnits?: string } }>('/api/v1/math/curriculum', async (request, reply) => {
+    const { normalizeStudyUnits } = await import('@/config/subjects');
+    const { getMathCurriculum } = await import('@/config/math-curriculum');
+    const units = normalizeStudyUnits('math', Number(request.query.studyUnits));
+    return reply.send(getMathCurriculum(units as 3 | 4 | 5));
+  });
+
+  app.get<{ Querystring: { studyUnits?: string } }>('/api/v1/math/exams', async (request, reply) => {
+    const { normalizeStudyUnits } = await import('@/config/subjects');
+    const { getMathExamCatalog } = await import('@/config/math-exams');
+    const units = normalizeStudyUnits('math', Number(request.query.studyUnits));
+    return reply.send(getMathExamCatalog(units as 3 | 4 | 5));
   });
 
     // ─── Error handler ────────────────────────────────────────────────────────

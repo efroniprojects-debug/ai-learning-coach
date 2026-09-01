@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { db, conversations, conversationMessages, skillMastery } from '@/db';
 import { eq, asc, and, sql } from 'drizzle-orm';
-import { aiGateway } from '@/ai/gateway';
+import { AIGateway, aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
 import type { TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
@@ -59,6 +59,19 @@ const DB_TIMEOUT_MS = 5_000;
 const GEMINI_TIMEOUT_MS = 90_000;
 const GEMINI_CACHE_TTL_MS = 5 * 60 * 1000;
 const geminiResponseCache = new Map<string, { response: string; expiresAt: number }>();
+
+async function createStreamingGateway(userId: string): Promise<AIGateway> {
+  const gateway = new AIGateway();
+  try {
+    await gateway.initializeForUser(userId);
+    return gateway;
+  } catch (userConfigError) {
+    const demoKey = process.env.DEMO_GEMINI_API_KEY;
+    if (!demoKey) throw userConfigError;
+    gateway.initializeWithProvider('gemini', demoKey, process.env.DEMO_GEMINI_MODEL ?? 'gemini-3.6-flash');
+    return gateway;
+  }
+}
 
 function getCachedGeminiResponse(key: string): string | null {
   const cached = geminiResponseCache.get(key);
@@ -187,95 +200,32 @@ export class TutorService {
       question.text, contextText, question.topic, question.subtopic
     );
 
-    // ── Gemini direct call (supports Vision when imageData present) ──────────
-    const apiKey = process.env.DEMO_GEMINI_API_KEY;
-    if (!apiKey) throw new Error('DEMO_GEMINI_API_KEY is not configured');
-
-    const promptText = `${systemPrompt}\n\n${userMessageContent}`;
-
-    // Build history parts for multi-turn
-    const historyContents = history.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-    // Build current user turn parts
-    type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
+    const gateway = await createStreamingGateway(question.userId);
     const attachmentInstruction = question.documentName
       ? `\n\nלשאלה מצורף המסמך "${question.documentName}". יש לקרוא אותו ולהסתמך עליו בתשובה.`
       : '';
-    const currentParts: GeminiPart[] = [{ text: promptText + attachmentInstruction }];
-    if (question.imageData) {
-      currentParts.push({ inline_data: { mime_type: 'image/jpeg', data: question.imageData } });
-    }
-    if (question.documentData && question.documentMimeType) {
-      currentParts.push({ inline_data: { mime_type: question.documentMimeType, data: question.documentData } });
-    }
-
-    const contents = [
-      ...historyContents,
-      { role: 'user', parts: currentParts },
+    const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent + attachmentInstruction }];
+    const attachments = [
+      ...(question.imageData ? [{ mimeType: 'image/jpeg', data: question.imageData }] : []),
+      ...(question.documentData && question.documentMimeType ? [{ mimeType: question.documentMimeType, data: question.documentData }] : []),
     ];
-
-    // Gemini's SSE endpoint starts returning text before the full structured
-    // response is complete, while the accumulated JSON is still parsed below.
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:streamGenerateContent?alt=sse';
 
     // Exact-match, per-user cache. Attachments are excluded to avoid reusing a
     // response for different binary content with the same filename.
     const cacheKey = question.imageData || question.documentData
       ? ''
-      : JSON.stringify({ userId: question.userId, mode: question.mode, topic: question.topic, subtopic: question.subtopic, contents });
+      : JSON.stringify({ userId: question.userId, mode: question.mode, topic: question.topic, subtopic: question.subtopic, messages });
     let fullText = cacheKey ? getCachedGeminiResponse(cacheKey) : null;
 
     if (!fullText) {
-      const geminiRes = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.4,
-          },
-        }),
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-      });
-
-      if (!geminiRes.ok) {
-        const errorData = await geminiRes.json().catch(() => null) as { error?: { message?: string } } | null;
-        throw new Error(errorData?.error?.message || `Gemini API error: ${geminiRes.status}`);
-      }
-      if (!geminiRes.body) throw new Error('Gemini returned an empty stream');
-
-      const reader = geminiRes.body.getReader();
-      const decoder = new TextDecoder();
-      let streamBuffer = '';
       fullText = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        streamBuffer += decoder.decode(value, { stream: true });
-        const lines = streamBuffer.split('\n');
-        streamBuffer = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6).trim();
-          if (!raw || raw === '[DONE]') continue;
-          const chunk = JSON.parse(raw) as {
-            error?: { message?: string };
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          if (chunk.error?.message) throw new Error(chunk.error.message);
-          const delta = chunk.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
-          if (delta) {
-            fullText += delta;
-            yield { type: 'delta', text: delta };
-          }
-        }
+      for await (const chunk of gateway.generateStream({
+        messages, systemPrompt, maxTokens: 2048, temperature: 0.4,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments,
+      })) {
+        if (!chunk.delta) continue;
+        fullText += chunk.delta;
+        yield { type: 'delta', text: chunk.delta };
       }
       fullText = fullText.trim();
       if (!fullText) {
