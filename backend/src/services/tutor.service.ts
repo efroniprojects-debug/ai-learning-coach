@@ -28,17 +28,20 @@ export const TutorStructuredResponseSchema = z.object({
   socraticQuestion: z.string().optional(),
 });
 
-const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
-  type: 'OBJECT',
-  required: ['explanation', 'steps', 'hints', 'misconceptions'],
-  properties: {
-    explanation: { type: 'STRING' },
-    steps: { type: 'ARRAY', minItems: 2, items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
-    hints: { type: 'ARRAY', items: { type: 'STRING' } },
-    misconceptions: { type: 'ARRAY', items: { type: 'OBJECT', required: ['misconception', 'correction'], properties: { misconception: { type: 'STRING' }, correction: { type: 'STRING' } } } },
-    socraticQuestion: { type: 'STRING', nullable: true },
-  },
-};
+function buildTutorResponseJsonSchema(mode?: TutorMode): Record<string, unknown> {
+  const minItems = mode === 'full' || mode === 'step_by_step' || mode === 'concept' ? 4 : mode === 'diagnose' ? 3 : 2;
+  return {
+    type: 'OBJECT',
+    required: ['explanation', 'steps', 'hints', 'misconceptions'],
+    properties: {
+      explanation: { type: 'STRING' },
+      steps: { type: 'ARRAY', minItems, items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
+      hints: { type: 'ARRAY', items: { type: 'STRING' } },
+      misconceptions: { type: 'ARRAY', items: { type: 'OBJECT', required: ['misconception', 'correction'], properties: { misconception: { type: 'STRING' }, correction: { type: 'STRING' } } } },
+      socraticQuestion: { type: 'STRING', nullable: true },
+    },
+  };
+}
 
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
@@ -56,23 +59,31 @@ export function isTutorResponseComplete(response: TutorStructuredResponse, mode?
   if (response.steps.some((step) => !hasMeaningfulText(step.title, 2) || !hasMeaningfulText(step.content, 12))) return false;
   if (response.hints.some((hint) => !hasMeaningfulText(hint, 4))) return false;
 
-  // step_by_step mode must show an explicit progression; require at least 2 steps.
-  if (mode === 'step_by_step') return response.steps.length >= 2;
-  // full mode: prefer 2+ steps, but accept a single step only when its content is
-  // substantial enough (>=100 chars) -- models processing document attachments
-  // reliably produce one comprehensive step rather than splitting the solution.
-  if (mode === 'full') {
-    return response.steps.length >= 2 || hasMeaningfulText(response.steps[0]?.content ?? '', 100);
-  }
+  // step_by_step and full modes require at least 2 distinct steps — a single
+  // step that lumps the whole solution together is not pedagogically valid.
+  if (mode === 'step_by_step' || mode === 'full') return response.steps.length >= 2;
   return true;
 }
 
 function buildQualityRetryPrompt(mode?: TutorMode): string {
-  const fullRequirements = mode === 'full'
-    ? 'כלול את כל השלבים שרלוונטיים לתרגיל: נתונים ומבוקש, עקרונות ונוסחאות, הצבה וחישוב כאשר קיימים, ותשובה סופית עם יחידות ובדיקה.'
-    : 'יש לפרק את הדרך לשלבים מהותיים ומוסברים שמתאימים למצב ההוראה שנבחר.';
-  return `התשובה הקודמת אינה פתרון לימודי תקין: היא קצרה מדי או כוללת placeholders כגון "...". ${fullRequirements}
-כתוב מחדש את כל התשובה מהתחלה. אין להשתמש בשלוש נקודות במקום תוכן. החזר JSON בלבד לפי הסכמה שניתנה.`;
+  const modeRequirements: Record<string, string> = {
+    full: `steps[] חייב לכלול בדיוק 5 שלבים נפרדים — אסור לאחד אותם לשלב אחד:
+שלב 1 — title: "נתונים ומבוקש": פרט כל הנתונים המספריים עם יחידות.
+שלב 2 — title: "נוסחה": כתוב הנוסחה הרלוונטית בסימון $LaTeX$.
+שלב 3 — title: "הצבה": הצב את הנתונים לנוסחה.
+שלב 4 — title: "חישוב": בצע החישוב המספרי שלב אחרי שלב.
+שלב 5 — title: "תשובה": כתוב התשובה הסופית עם יחידות ובדיקת הגיון.`,
+    step_by_step: `steps[] חייב לכלול 4 עד 6 שלבים נפרדים, כל אחד עם title ייחודי ו-content מפורט.
+שלב 1: ניתוח הנתונים. שלב 2: בחירת נוסחה. שלבים 3+: הצבה, חישוב. שלב אחרון: תשובה עם יחידות.`,
+    diagnose: `steps[] חייב לכלול לפחות 3 שלבים: שלב 1 "זיהוי הטעות", שלב 2 "ההבהרה", שלב 3+ "תיקון".`,
+    concept: `steps[] חייב לכלול 4 שלבים: שלב 1 "אנלוגיה", שלב 2 "הגדרה", שלב 3 "נוסחה", שלב 4 "דוגמה".`,
+  };
+  const requirement = mode && modeRequirements[mode]
+    ? modeRequirements[mode]
+    : 'יש לפרק את הדרך לפחות ל-2 שלבים מהותיים ומוסברים.';
+  return `התשובה הקודמת אינה תקינה: מספר הצעדים אינו מספיק או שיש placeholders כגון "...".
+${requirement}
+כתוב מחדש את כל התשובה מהתחלה. אין להשתמש בשלוש נקודות במקום תוכן. החזר JSON בלבד.`;
 }
 
 export interface TutorSourceCitation {
@@ -204,7 +215,7 @@ async function createStreamingGateway(userId: string): Promise<AIGateway> {
   } catch (userConfigError) {
     const demoKey = process.env.DEMO_GEMINI_API_KEY;
     if (!demoKey) throw userConfigError;
-    gateway.initializeWithProvider('gemini', demoKey, process.env.DEMO_GEMINI_MODEL ?? 'gemini-3.6-flash');
+    gateway.initializeWithProvider('gemini', demoKey, process.env.DEMO_GEMINI_MODEL ?? 'gemini-2.0-flash');
     return gateway;
   }
 }
@@ -279,7 +290,7 @@ export class TutorService {
     ];
 
     const aiResponse = await aiGateway.generateResponse({
-      messages, systemPrompt, maxTokens: 4096, temperature: 0.7, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
+      messages, systemPrompt, maxTokens: 4096, temperature: 0.7, responseFormat: 'json', responseJsonSchema: buildTutorResponseJsonSchema(question.mode),
     });
 
     const structured = sanitizeCitationReferences(
@@ -369,7 +380,7 @@ export class TutorService {
       fullText = '';
       for await (const chunk of gateway.generateStream({
         messages, systemPrompt, maxTokens: 4096, temperature: 0.4,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json', responseJsonSchema: buildTutorResponseJsonSchema(question.mode),
       })) {
         if (!chunk.delta) continue;
         // Buffer the provider's structured JSON until it passes validation.
@@ -398,7 +409,7 @@ export class TutorService {
         signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
         attachments,
         responseFormat: 'json',
-        responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
+        responseJsonSchema: buildTutorResponseJsonSchema(question.mode),
       });
       fullText = retryResponse.content.trim();
       parsedResponse = this.parseStructuredResponse(fullText);

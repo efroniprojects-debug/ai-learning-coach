@@ -107,6 +107,16 @@ describe('tutor response quality gate', () => {
       misconceptions: [],
     }, 'full')).toBe(false);
   });
+
+  it('rejects a one-step full response even when the step content is very long', () => {
+    const longContent = 'זיהיתי מהתמונה: גרף מהירות-זמן עבור תנועת מעלית. ציר x הוא הזמן בשניות, ציר y הוא המהירות במטרים לשנייה. הגרף מורכב משני קטעים ישרים המייצגים תנועות בשני הכיוונים. נקודת תובנה: שטח הכלוא בין גרף המהירות לציר הזמן מייצג את ההעתק. שטחים מעל הציר הם תנועה כלפי מעלה ושטחים מתחתיו הם תנועה כלפי מטה. חיסום או חיבור השטחים מאפשר למצוא את ההעתק הכולל בקלות.';
+    expect(isTutorResponseComplete({
+      explanation: 'פתרון שלם באמצעות גרף מהירות-זמן.',
+      steps: [{ number: 1, title: 'הסבר', content: longContent }],
+      hints: ['בדוק את שטח הגרף'],
+      misconceptions: [],
+    }, 'full')).toBe(false);
+  });
 });
 
 describe('source grounding', () => {
