@@ -47,6 +47,13 @@ export function extractStreamingExplanation(jsonText: string): string {
   return result;
 }
 
+export function isDocumentQuestionSpecific(text: string): boolean {
+  const normalized = text.trim();
+  if (normalized.length >= 40) return true;
+  return /(?:עמוד|תרגיל|שאלה|סעיף)\s*(?:מספר|מס['׳]?|#)?\s*\d+/i.test(normalized)
+    || /התרגיל\s+(?:היחיד|המצורף|שבמסמך)/i.test(normalized);
+}
+
 export function readableQuestionError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
   if (/TUTOR_INCOMPLETE_RESPONSE/.test(message)) return 'המורה לא הצליח להפיק פתרון מלא ואיכותי. אפשר לנסות שוב או לנסח במדויק איזה תרגיל במסמך לפתור.';
@@ -122,6 +129,10 @@ export function QuestionWorkspacePage() {
 
   const handleSubmitQuestion = useCallback(async (text: string) => {
     if (isStreaming) return;
+    if (document && !isDocumentQuestionSpecific(text)) {
+      setError('כדי לפתור מתוך חוברת, ציין מספר תרגיל, עמוד או סעיף. לדוגמה: "פתור תרגיל 4 בעמוד 7".');
+      return;
+    }
     const controller = new AbortController();
     abortRef.current = controller;
     abortReasonRef.current = null;
