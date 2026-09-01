@@ -41,6 +41,14 @@ describe('parseTutorStructuredResponse', () => {
     expect(result.explanation).toBe('הסבר נקי');
     expect(result.explanation).not.toContain('{');
   });
+
+  it('preserves a plain-text solution when the provider ignores JSON mode', () => {
+    const result = parseTutorStructuredResponse('```markdown\nפתרון מלא: נציב בנוסחה ונקבל $x=4$.\n```');
+
+    expect(result.explanation).toContain('פתרון מלא');
+    expect(result.explanation).not.toContain('לא הצלחתי לסדר');
+    expect(result.steps[0].content).toBe(result.explanation);
+  });
 });
 
 describe('source grounding', () => {

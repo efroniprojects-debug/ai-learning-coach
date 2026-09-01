@@ -28,6 +28,9 @@ export class GeminiAdapter implements AIAdapter {
       generationConfig: {
         temperature: options.temperature ?? 0.7,
         maxOutputTokens: options.maxTokens ?? 4096,
+        // Native JSON mode prevents otherwise valid tutor answers from being
+        // wrapped in Markdown and rejected by the structured response parser.
+        ...(options.responseFormat === 'json' ? { responseMimeType: 'application/json' } : {}),
       },
     });
   }

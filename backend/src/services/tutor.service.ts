@@ -220,7 +220,7 @@ export class TutorService {
     ];
 
     const aiResponse = await aiGateway.generateResponse({
-      messages, systemPrompt, maxTokens: 2048, temperature: 0.7,
+      messages, systemPrompt, maxTokens: 2048, temperature: 0.7, responseFormat: 'json',
     });
 
     const structured = sanitizeCitationReferences(
@@ -311,7 +311,7 @@ export class TutorService {
       fullText = '';
       for await (const chunk of gateway.generateStream({
         messages, systemPrompt, maxTokens: 2048, temperature: 0.4,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json',
       })) {
         if (!chunk.delta) continue;
         fullText += chunk.delta;
@@ -566,7 +566,13 @@ export function parseTutorStructuredResponse(rawText: string): TutorStructuredRe
     return normalizeStructuredResponse(parsed);
   } catch {
     const explanation = extractExplanationFallback(rawText);
-    const safeExplanation = explanation || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+    // Preserve readable teaching content if a provider ignores JSON mode.
+    const readableRawText = normalizeTutorText(
+      rawText
+        .replace(/^\s*```(?:json|markdown)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+    );
+    const safeExplanation = explanation || readableRawText || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
     return {
       explanation: safeExplanation,
       steps: [{ number: 1, title: 'הסבר', content: safeExplanation }],
