@@ -79,6 +79,13 @@ export function defaultTutorTabForMode(mode?: TutorMode): Tab {
   return mode === 'step_by_step' || mode === 'full' ? 'steps' : 'explanation';
 }
 
+const MODE_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
+  step_by_step: { label: 'שלב-אחר-שלב', emoji: '🔍', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  full:         { label: 'פתרון מלא מיידי', emoji: '⚡', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  diagnose:     { label: 'אבחון טעות', emoji: '🩺', color: 'bg-red-50 text-red-700 border-red-200' },
+  concept:      { label: 'הסבר מושג', emoji: '💡', color: 'bg-green-50 text-green-700 border-green-200' },
+};
+
 interface Props {
   response: TutorResponse;
   isStreaming?: boolean;
@@ -160,8 +167,17 @@ export function ResponseDisplay({ response, isStreaming, streamText, onCancel, m
     );
   }
 
+  const modeInfo = mode ? MODE_LABELS[mode] : undefined;
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" dir="rtl">
+      {/* Mode indicator */}
+      {modeInfo && (
+        <div className={`flex items-center gap-1.5 px-4 py-2 border-b text-xs font-medium ${modeInfo.color}`}>
+          <span>{modeInfo.emoji}</span>
+          <span>{modeInfo.label}</span>
+        </div>
+      )}
       {/* Tab navigation */}
       <div className="flex flex-wrap items-center border-b border-gray-200 bg-gray-50">
         {tabs.map((tab) => (

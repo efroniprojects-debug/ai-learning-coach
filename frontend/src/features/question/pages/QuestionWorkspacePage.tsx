@@ -406,7 +406,7 @@ export function QuestionWorkspacePage() {
               mode={mode}
             />
           ) : response ? (
-            <ResponseDisplay response={response} mode={mode} />
+            <ResponseDisplay key={response.messageId} response={response} mode={mode} />
           ) : (
             <div className="flex flex-col items-center justify-center h-56 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400">
               <span className="text-4xl mb-3">🎓</span>
