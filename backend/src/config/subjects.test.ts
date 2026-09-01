@@ -29,4 +29,18 @@ describe('subject registry', () => {
     expect(normalizeStudyUnits('math', 3)).toBe(3);
     expect(buildSystemPrompt('step_by_step', 'math', 4)).toContain('4 יחידות לימוד');
   });
+
+  it('keeps teaching style separate from mode, subject, and study units', () => {
+    const concise = buildSystemPrompt('diagnose', 'math', 3, 'concise');
+    const balanced = buildSystemPrompt('diagnose', 'math', 3);
+    const deep = buildSystemPrompt('diagnose', 'math', 3, 'deep');
+
+    for (const prompt of [concise, balanced, deep]) {
+      expect(prompt).toContain('מצב פעולה: אבחון טעות');
+      expect(prompt).toContain('3 יחידות לימוד');
+    }
+    expect(concise).toContain('קצרה וישירה');
+    expect(balanced).toContain('מאוזן ומסביר');
+    expect(deep).toContain('מעמיק עם דוגמאות');
+  });
 });

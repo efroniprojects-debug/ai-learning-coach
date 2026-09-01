@@ -3,7 +3,7 @@ import { db, conversations, conversationMessages, skillMastery } from '@/db';
 import { eq, asc, and, sql } from 'drizzle-orm';
 import { AIGateway, aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
-import type { TutorMode } from '@/config/subjects';
+import type { TeachingStyle, TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
 
 // ── Structured response schema ────────────────────────────────────────────────
@@ -41,6 +41,7 @@ export interface TutorQuestion {
   studyUnits?: number;
   conversationId?: string;
   mode?: TutorMode;
+  teachingStyle?: TeachingStyle;
   topic?: string;
   subtopic?: string;
 }
@@ -110,7 +111,7 @@ export class TutorService {
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -171,7 +172,7 @@ export class TutorService {
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -214,7 +215,14 @@ export class TutorService {
     // response for different binary content with the same filename.
     const cacheKey = question.imageData || question.documentData
       ? ''
-      : JSON.stringify({ userId: question.userId, mode: question.mode, topic: question.topic, subtopic: question.subtopic, messages });
+      : JSON.stringify({
+        userId: question.userId,
+        mode: question.mode,
+        teachingStyle: question.teachingStyle,
+        topic: question.topic,
+        subtopic: question.subtopic,
+        messages,
+      });
     let fullText = cacheKey ? getCachedGeminiResponse(cacheKey) : null;
 
     if (!fullText) {

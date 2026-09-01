@@ -16,6 +16,7 @@ const askQuestionBodySchema = z.object({
   conversationId: z.string().uuid().optional(),
   subjectId: z.string().optional().default('physics'),
   studyUnits: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
+  teachingStyle: z.enum(['concise', 'balanced', 'deep']).optional(),
 });
 
 const streamQuestionBodySchema = z.object({
@@ -33,6 +34,7 @@ const streamQuestionBodySchema = z.object({
   ]).optional(),
   documentName: z.string().max(255).optional(),
   mode: z.enum(['step_by_step', 'full', 'diagnose', 'concept']).optional(),
+  teachingStyle: z.enum(['concise', 'balanced', 'deep']).optional(),
   topic: z.string().optional(),
   subtopic: z.string().optional(),
 });
@@ -84,6 +86,7 @@ export async function questionRoutes(app: FastifyInstance) {
             subjectId: body.subjectId,
             studyUnits,
             conversationId: body.conversationId,
+            teachingStyle: body.teachingStyle,
           },
           ragContext
         );
@@ -187,6 +190,7 @@ export async function questionRoutes(app: FastifyInstance) {
             documentMimeType: body.documentMimeType,
             documentName: body.documentName,
             mode: body.mode,
+            teachingStyle: body.teachingStyle,
             topic: body.topic,
             subtopic: body.subtopic,
           },

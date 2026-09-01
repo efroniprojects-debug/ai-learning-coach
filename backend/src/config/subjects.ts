@@ -7,6 +7,29 @@ export interface SubjectConfig {
 }
 
 export type TutorMode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
+export type TeachingStyle = 'concise' | 'balanced' | 'deep';
+
+export const DEFAULT_TEACHING_STYLE: TeachingStyle = 'balanced';
+
+// Teaching style controls presentation only. Subject, study level, correctness,
+// and the selected tutor mode remain authoritative in the surrounding prompt.
+export const TEACHING_STYLE_PROMPTS: Record<TeachingStyle, string> = {
+  concise: `
+סגנון הוראה: חד וקולע.
+- כתוב תשובה קצרה וישירה, בלי הקדמות מיותרות.
+- השתמש בדוגמה אחת רק כאשר היא חיונית להבנה.
+- שמור על כל שלבי ההיגיון והבדיקה הנדרשים לנכונות.`,
+  balanced: `
+סגנון הוראה: מאוזן ומסביר.
+- הסבר בקצב נעים ובפירוט בינוני, עם דוגמה קצרה כשזה מועיל.
+- חבר בין האינטואיציה לבין הדרך הפורמלית בלי להעמיס.
+- זהו סגנון ברירת המחדל.`,
+  deep: `
+סגנון הוראה: מעמיק עם דוגמאות.
+- הסבר לעומק את הסיבה לכל שלב ואת הקשרים למושגים קודמים.
+- שלב אנלוגיה או דוגמה מהחיים ודוגמה לימודית נוספת כאשר הן רלוונטיות.
+- סיים בבדיקת היגיון וברעיון קצר לתרגול דומה.`,
+};
 
 // ── Mode prompt injections ────────────────────────────────────────────────────
 
@@ -267,7 +290,12 @@ export function normalizeStudyUnits(subjectId: string, value?: number): StudyUni
   return value === 3 || value === 4 || value === 5 ? value : 5;
 }
 
-export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_SUBJECT_ID, studyUnits?: number): string {
+export function buildSystemPrompt(
+  mode?: TutorMode,
+  subjectId: string = DEFAULT_SUBJECT_ID,
+  studyUnits?: number,
+  teachingStyle: TeachingStyle = DEFAULT_TEACHING_STYLE
+): string {
   const subject = getSubjectConfig(subjectId);
   const base = subject.id === 'physics'
     ? process.env.TUTOR_PROMPT_PHYSICS || BASE_PHYSICS_PROMPT
@@ -276,7 +304,7 @@ export function buildSystemPrompt(mode?: TutorMode, subjectId: string = DEFAULT_
   const levelInstruction = subjectId === 'math'
     ? `\n\nרמת לימוד מחייבת: ${normalizeStudyUnits(subjectId, studyUnits)} יחידות לימוד. התאם את עומק ההסבר, המושגים והתרגילים לרמה זו בלבד.`
     : '';
-  return MODE_PROMPTS[modeKey] + '\n\n' + base + levelInstruction;
+  return MODE_PROMPTS[modeKey] + '\n\n' + TEACHING_STYLE_PROMPTS[teachingStyle] + '\n\n' + base + levelInstruction;
 }
 
 // ── Subject Registry ──────────────────────────────────────────────────────────

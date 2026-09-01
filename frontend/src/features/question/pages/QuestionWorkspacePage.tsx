@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { QuestionForm } from '../components/QuestionForm';
 import { ResponseDisplay } from '../components/ResponseDisplay';
 import { ModeSelector } from '../components/ModeSelector';
+import { TeachingStyleSelector, type TeachingStyle } from '../components/TeachingStyleSelector';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
@@ -17,6 +18,12 @@ type Mode = 'step_by_step' | 'full' | 'diagnose' | 'concept';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const QUESTION_TIMEOUT_MS = 120_000;
+const TEACHING_STYLE_STORAGE_KEY = 'smarterai-teaching-style';
+
+function loadTeachingStyle(): TeachingStyle {
+  const stored = window.localStorage.getItem(TEACHING_STYLE_STORAGE_KEY);
+  return stored === 'concise' || stored === 'deep' || stored === 'balanced' ? stored : 'balanced';
+}
 
 export function extractStreamingExplanation(jsonText: string): string {
   const match = /"explanation"\s*:\s*"/.exec(jsonText);
@@ -71,6 +78,7 @@ export function QuestionWorkspacePage() {
   const [document, setDocument] = useState<AttachedDocument | null>(null);
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [mode, setMode] = useState<Mode>('step_by_step');
+  const [teachingStyle, setTeachingStyle] = useState<TeachingStyle>(loadTeachingStyle);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(routeState?.selectedTopic ?? null);
   const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(routeState?.selectedSubtopic ?? null);
   const [celebration, setCelebration] = useState<string | null>(null);
@@ -83,6 +91,11 @@ export function QuestionWorkspacePage() {
     if (routeState?.selectedTopic) setSelectedTopic(routeState.selectedTopic);
     if (routeState?.selectedSubtopic) setSelectedSubtopic(routeState.selectedSubtopic);
   }, [routeState?.selectedTopic, routeState?.selectedSubtopic]);
+
+  useEffect(() => {
+    // Keep the student's explicit presentation preference across visits.
+    window.localStorage.setItem(TEACHING_STYLE_STORAGE_KEY, teachingStyle);
+  }, [teachingStyle]);
 
   useEffect(() => {
     // Preserve old shared links while keeping the dashboard selection as the
@@ -132,6 +145,7 @@ export function QuestionWorkspacePage() {
           studyUnits: subjectId === 'math' ? mathStudyUnits : undefined,
           conversationId: isFollowUp ? conversationId : undefined,
           mode,
+          teachingStyle,
           topic: selectedTopic ?? undefined,
           subtopic: selectedSubtopic ?? undefined,
           imageData: imageData ?? undefined,
@@ -212,7 +226,7 @@ export function QuestionWorkspacePage() {
       window.clearTimeout(timeoutId);
       if (abortRef.current === controller) abortRef.current = null;
     }
-  }, [conversationId, document, imageData, isFollowUp, isStreaming, mathStudyUnits, mode, selectedTopic, selectedSubtopic, subjectId]);
+  }, [conversationId, document, imageData, isFollowUp, isStreaming, mathStudyUnits, mode, selectedTopic, selectedSubtopic, subjectId, teachingStyle]);
 
   const cancelQuestion = () => {
     abortReasonRef.current = 'user';
@@ -292,6 +306,15 @@ export function QuestionWorkspacePage() {
           <div className="bg-white border border-gray-200 rounded-xl p-4">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">מצב הסבר</p>
             <ModeSelector mode={mode} onChange={setMode} disabled={isStreaming} />
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">סגנון המורה</p>
+            <TeachingStyleSelector
+              value={teachingStyle}
+              onChange={setTeachingStyle}
+              disabled={isStreaming}
+            />
           </div>
 
           {/* Follow-up */}
