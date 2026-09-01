@@ -323,7 +323,7 @@ export class TutorService {
 
     const gateway = await createStreamingGateway(question.userId);
     const attachmentInstruction = question.documentName
-      ? `\n\nלשאלה מצורף המסמך "${question.documentName}". יש לקרוא אותו ולהסתמך עליו בתשובה.`
+      ? `\n\nלשאלה מצורף המסמך "${question.documentName}". המסמך המצורף הוא מקור הסמכות היחיד לנתוני התרגיל בבקשה זו. קרא את התרגיל המדויק שהמשתמש ציין, חלץ ממנו את כל הנתונים והמבוקש, ופתור אותו בלבד. אין לערב שאלות או נתונים ממקורות אחרים.`
       : '';
     const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent + attachmentInstruction }];
     const attachments = [

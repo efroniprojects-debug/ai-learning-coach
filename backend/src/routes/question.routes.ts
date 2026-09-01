@@ -7,6 +7,7 @@ import { TutorService } from '@/services/tutor.service';
 import { db, conversations, conversationMessages, conversationFolders } from '@/db';
 import { eq, desc, and, asc, ilike, isNull } from 'drizzle-orm';
 import { DEFAULT_SUBJECT_ID, getSubjectConfig, normalizeStudyUnits } from '@/config/subjects';
+import { shouldRetrieveKnowledgeContext } from '@/config/question-context';
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 
@@ -170,21 +171,21 @@ export async function questionRoutes(app: FastifyInstance) {
       try {
         // RAG: try DB search, fall back to empty if DB unavailable
         let ragContext: Awaited<ReturnType<typeof KnowledgeService.searchChunks>> = [];
-        sendEvent({ type: 'status', stage: 'rag_started' });
-        try {
-          ragContext = await withTimeout(
-            KnowledgeService.searchChunks(body.text, 5, body.subjectId, body.studyUnits),
-            5_000,
-            'RAG'
-          );
-          sendEvent({ type: 'status', stage: 'rag_completed', chunks: ragContext.length });
-        } catch (ragErr) {
-          app.log.warn('RAG search failed, continuing without context: ' + String(ragErr));
-          sendEvent({
-            type: 'status',
-            stage: 'rag_skipped',
-            reason: ragErr instanceof Error ? ragErr.message : String(ragErr),
-          });
+        if (shouldRetrieveKnowledgeContext(body)) {
+          sendEvent({ type: 'status', stage: 'rag_started' });
+          try {
+            ragContext = await withTimeout(
+              KnowledgeService.searchChunks(body.text, 5, body.subjectId, body.studyUnits),
+              5_000,
+              'RAG'
+            );
+            sendEvent({ type: 'status', stage: 'rag_completed', chunks: ragContext.length });
+          } catch (ragErr) {
+            app.log.warn('RAG search failed, continuing without context: ' + String(ragErr));
+            sendEvent({ type: 'status', stage: 'rag_skipped', reason: ragErr instanceof Error ? ragErr.message : String(ragErr) });
+          }
+        } else {
+          sendEvent({ type: 'status', stage: 'rag_skipped', reason: 'direct_attachment_is_primary_source' });
         }
 
         sendEvent({ type: 'status', stage: 'gemini_started' });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractStreamingExplanation, readableQuestionError } from './QuestionWorkspacePage';
+import { extractStreamingExplanation, isDocumentQuestionSpecific, readableQuestionError } from './QuestionWorkspacePage';
 
 describe('extractStreamingExplanation', () => {
   it('shows only readable explanation text from partial structured JSON', () => {
@@ -17,5 +17,14 @@ describe('extractStreamingExplanation', () => {
 describe('readableQuestionError', () => {
   it('explains when the tutor rejects an incomplete solution', () => {
     expect(readableQuestionError(new Error('TUTOR_INCOMPLETE_RESPONSE'))).toContain('פתרון מלא ואיכותי');
+  });
+});
+
+describe('document question targeting', () => {
+  it('rejects vague workbook requests and accepts an exact exercise reference', () => {
+    expect(isDocumentQuestionSpecific('פתור')).toBe(false);
+    expect(isDocumentQuestionSpecific('פתור את זה')).toBe(false);
+    expect(isDocumentQuestionSpecific('פתור תרגיל 4 בעמוד 7')).toBe(true);
+    expect(isDocumentQuestionSpecific('פתור את התרגיל היחיד במסמך')).toBe(true);
   });
 });
