@@ -29,6 +29,18 @@ export const TutorStructuredResponseSchema = z.object({
 
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
+export interface TutorSourceCitation {
+  id: string;
+  text: string;
+  source: string;
+  citationNumber: number;
+  sourceType: KnowledgeChunk['sourceType'];
+  page?: number;
+  section?: string;
+  year?: number;
+  url?: string;
+}
+
 export interface TutorQuestion {
   text: string;
   imageUrls?: string[];
@@ -50,7 +62,7 @@ export interface TutorFullResponse {
   structured: TutorStructuredResponse;
   conversationId: string;
   messageId: string;
-  sourceChunks: Array<{ id: string; text: string; source: string }>;
+  sourceChunks: TutorSourceCitation[];
   rawText: string;
   masteryUpdate?: { subtopic: string; previousElo: number; elo: number; confidence: string };
 }
@@ -60,6 +72,68 @@ const DB_TIMEOUT_MS = 5_000;
 const GEMINI_TIMEOUT_MS = 90_000;
 const GEMINI_CACHE_TTL_MS = 5 * 60 * 1000;
 const geminiResponseCache = new Map<string, { response: string; expiresAt: number }>();
+
+function verifiedSourceUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Convert only retrieved chunks into citations; URLs are never inferred. */
+export function buildSourceCitations(chunks: KnowledgeChunk[]): TutorSourceCitation[] {
+  return chunks.map((chunk, index) => ({
+    id: chunk.id,
+    text: chunk.text.trim().substring(0, 240),
+    source: chunk.source,
+    citationNumber: index + 1,
+    sourceType: chunk.sourceType,
+    page: chunk.metadata.page,
+    section: chunk.metadata.section,
+    year: chunk.metadata.year,
+    url: verifiedSourceUrl(chunk.metadata.sourceUrl),
+  }));
+}
+
+export function buildGroundingInstruction(sourceCount: number): string {
+  if (sourceCount === 0) {
+    return 'לא נמצא חומר לימוד רלוונטי במאגר. אל תמציא מקור, קישור או ציטוט; ענה מהידע הכללי והבהר שאין מקור מצורף.';
+  }
+  return `השתמש רק בציטוטים [מקור 1] עד [מקור ${sourceCount}] שסופקו כאן. אל תמציא מספר מקור, שם מקור או קישור שלא הופיעו בחומר.`;
+}
+
+function sanitizeCitationText(text: string, sourceCount: number): string {
+  return text.replace(/\[מקור\s+(\d+)\]/g, (citation, rawNumber: string) => {
+    const number = Number(rawNumber);
+    return number >= 1 && number <= sourceCount ? citation : '';
+  }).replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+/** Remove model-generated citation markers that do not map to retrieved chunks. */
+export function sanitizeCitationReferences(
+  response: TutorStructuredResponse,
+  sourceCount: number
+): TutorStructuredResponse {
+  return {
+    explanation: sanitizeCitationText(response.explanation, sourceCount),
+    steps: response.steps.map((step) => ({
+      ...step,
+      title: sanitizeCitationText(step.title, sourceCount),
+      content: sanitizeCitationText(step.content, sourceCount),
+    })),
+    hints: response.hints.map((hint) => sanitizeCitationText(hint, sourceCount)),
+    misconceptions: response.misconceptions.map((item) => ({
+      misconception: sanitizeCitationText(item.misconception, sourceCount),
+      correction: sanitizeCitationText(item.correction, sourceCount),
+    })),
+    socraticQuestion: response.socraticQuestion
+      ? sanitizeCitationText(response.socraticQuestion, sourceCount)
+      : undefined,
+  };
+}
 
 async function createStreamingGateway(userId: string): Promise<AIGateway> {
   const gateway = new AIGateway();
@@ -124,7 +198,7 @@ export class TutorService {
       );
       history = await this.loadHistory(convId);
       const userMessageContent = this.buildUserPrompt(
-        question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+        question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic
       );
       await db.insert(conversationMessages).values({
         conversationId: convId, role: 'user', content: userMessageContent,
@@ -134,7 +208,7 @@ export class TutorService {
     }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
-      question.text, contextText, question.topic, question.subtopic
+      question.text, contextText, ragContext.length, question.topic, question.subtopic
     );
 
     const messages: AIMessage[] = [
@@ -146,7 +220,10 @@ export class TutorService {
       messages, systemPrompt, maxTokens: 2048, temperature: 0.7,
     });
 
-    const structured = this.parseStructuredResponse(aiResponse.content);
+    const structured = sanitizeCitationReferences(
+      this.parseStructuredResponse(aiResponse.content),
+      ragContext.length
+    );
     const masteryUpdate = await this.updateMastery(question, structured);
 
     const [savedAssistantMsg] = await db
@@ -162,7 +239,7 @@ export class TutorService {
       messageId: savedAssistantMsg.id,
       rawText: aiResponse.content,
       masteryUpdate,
-      sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
+      sourceChunks: buildSourceCitations(ragContext),
     };
   }
 
@@ -184,7 +261,7 @@ export class TutorService {
         );
         const conversationHistory = await this.loadHistory(conversationId);
         const userMessageContent = this.buildUserPrompt(
-          question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+          question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic
         );
         await db.insert(conversationMessages).values({
           conversationId, role: 'user', content: userMessageContent,
@@ -198,7 +275,7 @@ export class TutorService {
     }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
-      question.text, contextText, question.topic, question.subtopic
+      question.text, contextText, ragContext.length, question.topic, question.subtopic
     );
 
     const gateway = await createStreamingGateway(question.userId);
@@ -242,7 +319,10 @@ export class TutorService {
       if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
     }
 
-    const structured = this.parseStructuredResponse(fullText);
+    const structured = sanitizeCitationReferences(
+      this.parseStructuredResponse(fullText),
+      ragContext.length
+    );
     const masteryUpdate = await this.updateMastery(question, structured);
 
     let savedMsgId = 'no-db-' + Date.now();
@@ -267,7 +347,7 @@ export class TutorService {
         messageId: savedMsgId,
         rawText: fullText,
         masteryUpdate,
-        sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
+        sourceChunks: buildSourceCitations(ragContext),
       },
     };
   }
@@ -387,13 +467,15 @@ export class TutorService {
   }
 
   private static buildUserPrompt(
-    questionText: string, contextText: string, topic?: string, subtopic?: string
+    questionText: string,
+    contextText: string,
+    sourceCount: number,
+    topic?: string,
+    subtopic?: string
   ): string {
     const topicLine = topic ? `\nנושא: ${topic}${subtopic ? ` → ${subtopic}` : ''}` : '';
-    const citationInstruction = contextText
-      ? '\nהסתמך על החומר הרלוונטי, וציין בתוך ההסבר הפניות בפורמט [מקור 1], [מקור 2] לפי הצורך.'
-      : '';
-    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}` : ''}${citationInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
+    const groundingInstruction = buildGroundingInstruction(sourceCount);
+    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}\n\n` : ''}${groundingInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
   }
 
   private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
