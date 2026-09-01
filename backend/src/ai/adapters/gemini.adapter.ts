@@ -13,9 +13,14 @@ export class GeminiAdapter implements AIAdapter {
   ) {}
 
   private requestBody(options: AIGenerateOptions): string {
-    const contents = options.messages.map((message) => ({
+    const contents = options.messages.map((message, index) => ({
       role: message.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: message.content }],
+      parts: [
+        { text: message.content },
+        ...(index === options.messages.length - 1
+          ? (options.attachments ?? []).map((attachment) => ({ inline_data: { mime_type: attachment.mimeType, data: attachment.data } }))
+          : []),
+      ],
     }));
     return JSON.stringify({
       ...(options.systemPrompt ? { systemInstruction: { parts: [{ text: options.systemPrompt }] } } : {}),

@@ -66,11 +66,14 @@ export class PracticeService {
    * 3. 20% of time: practice stronger areas (maintain)
    * 4. Adapt difficulty based on recent performance
    */
-  static async selectNextProblem(userId: string, subjectId: string = DEFAULT_SUBJECT_ID, studyUnits?: number) {
+  static async selectNextProblem(userId: string, subjectId: string = DEFAULT_SUBJECT_ID, studyUnits?: number, requestedConceptId?: string) {
     getSubjectConfig(subjectId);
     const normalizedUnits = normalizeStudyUnits(subjectId, studyUnits);
     // Get user's mastery levels
     const configuredConcepts = new Set(getSubjectConcepts(subjectId, normalizedUnits));
+    if (requestedConceptId && !configuredConcepts.has(requestedConceptId)) {
+      throw new Error('Selected practice topic is not available for this subject');
+    }
     let allMastery = (await db.query.skillMastery.findMany({
       where: and(eq(skillMastery.userId, userId), eq(skillMastery.subjectId, subjectId), eq(skillMastery.studyUnits, normalizedUnits)),
     })).filter((mastery) => configuredConcepts.has(mastery.conceptId));
@@ -97,7 +100,10 @@ export class PracticeService {
 
     // Select concept
     const shouldPracticeWeak = Math.random() < 0.8; // 80% weak, 20% strong
-    const selectedMastery = shouldPracticeWeak
+    const selectedMastery = requestedConceptId
+      ? allMastery.find((mastery) => mastery.conceptId === requestedConceptId)
+        ?? await this.getOrCreateMastery(userId, requestedConceptId, subjectId, normalizedUnits)
+      : shouldPracticeWeak
       ? weakConcepts[Math.floor(Math.random() * Math.max(1, weakConcepts.length))] ||
         strongConcepts[0]
       : strongConcepts[Math.floor(Math.random() * Math.max(1, strongConcepts.length))] ||

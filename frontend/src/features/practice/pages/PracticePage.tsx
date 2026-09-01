@@ -6,6 +6,7 @@ import { practiceApi } from '@/services/practice.api';
 import { useSelectedSubject } from '@/features/subjects/useSelectedSubject';
 import { LearningContextSummary } from '@/features/subjects/LearningContextSummary';
 import type { PracticeProblem } from '@/services/practice.api';
+import { TopicSelector } from '@/features/question/components/TopicSelector';
 
 interface PracticeFeedback {
   eloChange: number;
@@ -25,9 +26,14 @@ export function PracticePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeSpent, setTimeSpent] = useState(0);
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [selectedSubtopic, setSelectedSubtopic] = useState<string | null>(null);
 
   useEffect(() => {
-    void loadNextProblem();
+    setCurrentProblem(null);
+    setSelectedTopic(null);
+    setSelectedSubtopic(null);
+    setLoading(false);
   }, [mathStudyUnits, subjectId]);
 
   useEffect(() => {
@@ -44,7 +50,8 @@ export function PracticePage() {
       setFeedback(null);
       setTimeSpent(0);
 
-      const problem = await practiceApi.selectProblem(subjectId, activeStudyUnits);
+      if (!selectedSubtopic) return;
+      const problem = await practiceApi.selectProblem(subjectId, activeStudyUnits, selectedSubtopic);
       setCurrentProblem(problem);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'טעינת התרגיל נכשלה');
@@ -99,30 +106,33 @@ export function PracticePage() {
     <div className="min-h-screen bg-gray-50 py-8 px-4" dir="rtl">
       <div className="max-w-3xl mx-auto">
         <LearningContextSummary />
+        <section className="mb-6 rounded-xl border border-gray-200 bg-white p-4">
+          <h1 className="mb-3 text-2xl font-bold">בחר נושא לתרגול ב{subject.nameHe}</h1>
+          <TopicSelector
+            subjectId={subjectId}
+            studyUnits={activeStudyUnits}
+            selectedSubtopic={selectedSubtopic}
+            onSelect={(topic, subtopic) => { setSelectedTopic(topic); setSelectedSubtopic(subtopic); setCurrentProblem(null); setFeedback(null); setError(null); }}
+          />
+          {selectedSubtopic && <button type="button" onClick={() => void loadNextProblem()} className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700">התחל תרגול: {selectedSubtopic}</button>}
+        </section>
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
           </div>
         )}
 
-        {!feedback && (
+        {!feedback && currentProblem && (
           <>
             <div className="mb-6 flex justify-between items-center">
-              <h1 className="text-3xl font-bold">תרגול מותאם אישית — {subject.nameHe}</h1>
+              <h2 className="text-3xl font-bold">תרגול מותאם אישית — {selectedTopic}</h2>
               <div className="text-sm text-gray-600">
                 זמן: {Math.floor(timeSpent / 60)}:{String(timeSpent % 60).padStart(2, '0')}
               </div>
             </div>
 
-            {currentProblem && (
-              <>
-                <ProblemDisplay problem={currentProblem} subjectId={subjectId} />
-                <AnswerForm
-                  onSubmit={handleSubmit}
-                  loading={submitting}
-                />
-              </>
-            )}
+            <ProblemDisplay problem={currentProblem} subjectId={subjectId} />
+            <AnswerForm onSubmit={handleSubmit} loading={submitting} />
           </>
         )}
 

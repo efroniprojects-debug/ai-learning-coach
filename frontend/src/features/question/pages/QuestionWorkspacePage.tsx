@@ -263,7 +263,7 @@ export function QuestionWorkspacePage() {
           />
           <div className="overflow-hidden rounded-xl border border-gray-200">
             <div className="bg-gray-50 px-4 py-3 font-medium text-gray-800 text-sm">
-              📚 {selectedSubtopic ? selectedSubtopic : 'בחר נושא'}
+              📚 בחר נושא
             </div>
             <div className="border-t border-gray-100 p-3">
               <TopicSelector
