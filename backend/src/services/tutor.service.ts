@@ -33,7 +33,7 @@ const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
   required: ['explanation', 'steps', 'hints', 'misconceptions'],
   properties: {
     explanation: { type: 'STRING' },
-    steps: { type: 'ARRAY', items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
+    steps: { type: 'ARRAY', minItems: 2, items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
     hints: { type: 'ARRAY', items: { type: 'STRING' } },
     misconceptions: { type: 'ARRAY', items: { type: 'OBJECT', required: ['misconception', 'correction'], properties: { misconception: { type: 'STRING' }, correction: { type: 'STRING' } } } },
     socraticQuestion: { type: 'STRING', nullable: true },
@@ -56,12 +56,14 @@ export function isTutorResponseComplete(response: TutorStructuredResponse, mode?
   if (response.steps.some((step) => !hasMeaningfulText(step.title, 2) || !hasMeaningfulText(step.content, 12))) return false;
   if (response.hints.some((hint) => !hasMeaningfulText(hint, 4))) return false;
 
-  // The selected mode controls the requested pedagogy in the system prompt.
-  // Fixed character and step counts incorrectly rejected valid concise and
-  // conceptual exercises after their answer had already been generated.
-  // A worked or guided solution must contain an actual progression, while the
-  // number of relevant steps remains determined by the exercise itself.
-  if (mode === 'step_by_step' || mode === 'full') return response.steps.length >= 2;
+  // step_by_step mode must show an explicit progression; require at least 2 steps.
+  if (mode === 'step_by_step') return response.steps.length >= 2;
+  // full mode: prefer 2+ steps, but accept a single step only when its content is
+  // substantial enough (≥100 chars) — models processing document attachments
+  // reliably produce one comprehensive step rather than splitting the solution.
+  if (mode === 'full') {
+    return response.steps.length >= 2 || hasMeaningfulText(response.steps[0]?.content ?? '', 100);
+  }
   return true;
 }
 
