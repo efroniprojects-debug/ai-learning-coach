@@ -33,6 +33,43 @@ export interface LearningMemoryInput {
   recurringMistakes: string | null;
 }
 
+export interface AutomaticLearningSignals {
+  mode: 'step_by_step' | 'full' | 'diagnose' | 'concept';
+  teachingStyle: 'concise' | 'balanced' | 'deep';
+  misconceptions: Array<{ misconception: string; correction: string }>;
+  masteryUpdate?: { subtopic: string; confidence: string };
+}
+
+function mergeUnique(existing: string | null, additions: string[]): string | null {
+  const values = [...(existing?.split(';').map((value) => value.trim()).filter(Boolean) ?? []), ...additions]
+    .filter((value, index, all) => value && all.indexOf(value) === index);
+  return values.length ? values.join('; ').slice(0, 1_000) : null;
+}
+
+/** Learn only from explicit UI choices and structured tutor signals. */
+export async function updateLearningMemoryAutomatically(
+  subjectId: string,
+  studyUnits: number | undefined,
+  current: LearningMemoryInput,
+  signals: AutomaticLearningSignals
+): Promise<LearningMemory> {
+  if (!current.isEnabled) return { ...emptyMemory(subjectId, studyUnits), ...current };
+  const styleNames = { concise: 'חד וקולע', balanced: 'מאוזן ומסביר', deep: 'מעמיק עם דוגמאות' } as const;
+  const modeNames = { step_by_step: 'שלב אחר שלב', full: 'פתרון מלא', diagnose: 'אבחון טעויות', concept: 'הסבר מושג' } as const;
+  const next: LearningMemoryInput = {
+    ...current,
+    learningPreferences: `סגנון מועדף: ${styleNames[signals.teachingStyle]}; מצב אחרון: ${modeNames[signals.mode]}`,
+    recurringMistakes: mergeUnique(current.recurringMistakes, signals.misconceptions.map((item) => item.misconception)),
+    knownStrengths: mergeUnique(
+      current.knownStrengths,
+      signals.masteryUpdate && ['proficient', 'expert'].includes(signals.masteryUpdate.confidence)
+        ? [signals.masteryUpdate.subtopic]
+        : []
+    ),
+  };
+  return saveLearningMemory(subjectId, studyUnits, next);
+}
+
 export async function getLearningMemory(subjectId: string, studyUnits?: number): Promise<LearningMemory> {
   const fallback = emptyMemory(subjectId, studyUnits);
   try {

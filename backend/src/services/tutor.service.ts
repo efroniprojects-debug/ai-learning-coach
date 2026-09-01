@@ -28,6 +28,18 @@ export const TutorStructuredResponseSchema = z.object({
   socraticQuestion: z.string().optional(),
 });
 
+const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'OBJECT',
+  required: ['explanation', 'steps', 'hints', 'misconceptions'],
+  properties: {
+    explanation: { type: 'STRING' },
+    steps: { type: 'ARRAY', items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
+    hints: { type: 'ARRAY', items: { type: 'STRING' } },
+    misconceptions: { type: 'ARRAY', items: { type: 'OBJECT', required: ['misconception', 'correction'], properties: { misconception: { type: 'STRING' }, correction: { type: 'STRING' } } } },
+    socraticQuestion: { type: 'STRING', nullable: true },
+  },
+};
+
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
 export interface TutorSourceCitation {
@@ -220,7 +232,7 @@ export class TutorService {
     ];
 
     const aiResponse = await aiGateway.generateResponse({
-      messages, systemPrompt, maxTokens: 2048, temperature: 0.7, responseFormat: 'json',
+      messages, systemPrompt, maxTokens: 4096, temperature: 0.7, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
     });
 
     const structured = sanitizeCitationReferences(
@@ -310,8 +322,8 @@ export class TutorService {
     if (!fullText) {
       fullText = '';
       for await (const chunk of gateway.generateStream({
-        messages, systemPrompt, maxTokens: 2048, temperature: 0.4,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json',
+        messages, systemPrompt, maxTokens: 4096, temperature: 0.4,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
       })) {
         if (!chunk.delta) continue;
         fullText += chunk.delta;
@@ -549,7 +561,8 @@ function extractJsonObject(rawText: string): string {
 }
 
 function extractExplanationFallback(rawText: string): string | null {
-  const match = extractJsonObject(rawText).match(/"explanation"\s*:\s*"((?:\\.|[^"\\])*)"/s);
+  const candidate = extractJsonObject(rawText).replace(/\\"/g, '"');
+  const match = candidate.match(/"explanation"\s*:\s*"((?:\\.|[^"\\])*)"/s);
   if (!match) return null;
   try {
     return normalizeTutorText(JSON.parse(`"${match[1]}"`) as string);
@@ -562,12 +575,13 @@ export function parseTutorStructuredResponse(rawText: string): TutorStructuredRe
   const jsonText = extractJsonObject(rawText);
   try {
     let parsed: unknown = JSON.parse(jsonText);
-    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    for (let depth = 0; depth < 4 && typeof parsed === 'string'; depth += 1) parsed = JSON.parse(parsed);
     return normalizeStructuredResponse(parsed);
   } catch {
     const explanation = extractExplanationFallback(rawText);
     // Preserve readable teaching content if a provider ignores JSON mode.
-    const readableRawText = normalizeTutorText(
+    const containsStructuredTransport = /\\?"(?:explanation|steps|hints|misconceptions)\\?"\s*:/.test(rawText);
+    const readableRawText = containsStructuredTransport ? '' : normalizeTutorText(
       rawText
         .replace(/^\s*```(?:json|markdown)?\s*/i, '')
         .replace(/\s*```\s*$/i, '')

@@ -15,6 +15,8 @@ export interface AIGenerateOptions {
   attachments?: Array<{ mimeType: string; data: string }>;
   /** Ask capable providers to constrain the response to a JSON document. */
   responseFormat?: 'json';
+  /** Provider-neutral JSON schema used by adapters with constrained output. */
+  responseJsonSchema?: Record<string, unknown>;
 }
 
 export interface AIGenerateResponse {

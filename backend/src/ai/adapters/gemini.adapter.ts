@@ -31,6 +31,7 @@ export class GeminiAdapter implements AIAdapter {
         // Native JSON mode prevents otherwise valid tutor answers from being
         // wrapped in Markdown and rejected by the structured response parser.
         ...(options.responseFormat === 'json' ? { responseMimeType: 'application/json' } : {}),
+        ...(options.responseJsonSchema ? { responseSchema: options.responseJsonSchema } : {}),
       },
     });
   }

@@ -5,7 +5,7 @@ import { ResponseDisplay } from '../components/ResponseDisplay';
 import { ModeSelector, type TutorMode } from '../components/ModeSelector';
 import { TeachingStyleSelector, type TeachingStyle } from '../components/TeachingStyleSelector';
 import { LearningMemoryPanel } from '../components/LearningMemoryPanel';
-import type { LearningMemoryInput } from '@/services/learning-memory.api';
+import { updateLearningMemoryAutomatically, type LearningMemoryInput } from '@/services/learning-memory.api';
 import { TopicSelector } from '../components/TopicSelector';
 import { PhetPanel } from '../components/PhetPanel';
 import { ImageUpload } from '../components/ImageUpload';
@@ -201,6 +201,15 @@ export function QuestionWorkspacePage() {
             setImageData(null);
             setDocument(null);
             receivedDone = true;
+            if (learningMemory?.isEnabled) {
+              const updatedMemory = await updateLearningMemoryAutomatically(
+                subjectId,
+                subjectId === 'math' ? mathStudyUnits : undefined,
+                learningMemory,
+                { mode, teachingStyle, misconceptions: d.structured.misconceptions ?? [], masteryUpdate: d.masteryUpdate }
+              );
+              setLearningMemory(updatedMemory);
+            }
             if (d.masteryUpdate && d.masteryUpdate.previousElo < 900 && d.masteryUpdate.elo >= 900) {
               const levels: Record<string, string> = { novice: 'מתחיל', intermediate: 'ביניים', proficient: 'שולט', expert: 'מומחה' };
               setCelebration(`🎉 שיפרת את ${d.masteryUpdate.subtopic}! רמה: ${levels[d.masteryUpdate.confidence] ?? d.masteryUpdate.confidence}`);
@@ -319,13 +328,6 @@ export function QuestionWorkspacePage() {
             />
           </div>
 
-          <LearningMemoryPanel
-            subjectId={subjectId}
-            studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
-            disabled={isStreaming}
-            onMemoryChange={setLearningMemory}
-          />
-
           {/* Follow-up */}
           {conversationId && response && (
             <label className="flex items-center gap-3 cursor-pointer p-3 bg-blue-50 border border-blue-200 rounded-xl">
@@ -346,6 +348,12 @@ export function QuestionWorkspacePage() {
               <>
                 <ImageUpload onImage={setImageData} disabled={isStreaming || Boolean(document)} />
                 <DocumentUpload onDocument={setDocument} disabled={isStreaming || Boolean(imageData)} />
+                <LearningMemoryPanel
+                  subjectId={subjectId}
+                  studyUnits={subjectId === 'math' ? mathStudyUnits : undefined}
+                  disabled={isStreaming}
+                  onMemoryChange={setLearningMemory}
+                />
                 {imageData && <span className="text-xs text-blue-600">📷 התמונה מוכנה</span>}
                 {document && <span className="text-xs text-violet-700">📄 המסמך מוכן</span>}
               </>
