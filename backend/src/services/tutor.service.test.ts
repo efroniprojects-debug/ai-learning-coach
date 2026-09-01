@@ -8,6 +8,7 @@ import {
   buildGroundingInstruction,
   buildSourceCitations,
   normalizeTutorText,
+  isTutorResponseComplete,
   parseTutorStructuredResponse,
   sanitizeCitationReferences,
 } from './tutor.service';
@@ -56,6 +57,27 @@ describe('parseTutorStructuredResponse', () => {
     expect(result.explanation).toBe('הסבר פיזיקלי קריא');
     expect(result.steps[0].content).not.toContain('explanation');
     expect(result.steps[0].content).not.toContain('{');
+  });
+});
+
+describe('tutor response quality gate', () => {
+  it('rejects placeholder JSON even when it matches the schema', () => {
+    expect(isTutorResponseComplete({
+      explanation: '...',
+      steps: [{ number: 1, title: '...', content: '...' }],
+      hints: ['...', '...'],
+      misconceptions: [],
+    }, 'full')).toBe(false);
+  });
+
+  it('accepts a complete multi-step full solution', () => {
+    const detailed = 'מזהים את הנתונים, מסבירים את העיקרון הפיזיקלי, מציבים בנוסחה עם יחידות ומבצעים את החישוב באופן מלא וברור.';
+    expect(isTutorResponseComplete({
+      explanation: 'נפתור באמצעות עקרון שימור האנרגיה ונבדוק בסוף שהיחידות והתוצאה מתאימות למצב הפיזיקלי המתואר.',
+      steps: [1, 2, 3, 4].map((number) => ({ number, title: `שלב ${number}`, content: detailed })),
+      hints: ['רשום תחילה את כל הנתונים והיחידות', 'בדוק שהתוצאה הסופית הגיונית מבחינה פיזיקלית'],
+      misconceptions: [],
+    }, 'full')).toBe(true);
   });
 });
 
