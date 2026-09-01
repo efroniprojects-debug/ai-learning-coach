@@ -42,28 +42,32 @@ const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
 
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
-const PLACEHOLDER_RESPONSE = /^(?:\.{2,}|…+|[-–—]|n\/?a|null|undefined)$/i;
+const UNPARSEABLE_RESPONSE_MESSAGE = 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+const PLACEHOLDER_RESPONSE = /^(?:\.{2,}|…+|[-–—]|n\/?a|null|undefined|לא הצלחתי לסדר את התשובה)/i;
 
 function hasMeaningfulText(value: string, minimumLength: number): boolean {
   const normalized = value.trim();
   return normalized.length >= minimumLength && !PLACEHOLDER_RESPONSE.test(normalized);
 }
 
-/** Reject structurally valid JSON that does not contain a usable lesson. */
+/** Reject transport placeholders and empty lesson fields without grading by length. */
 export function isTutorResponseComplete(response: TutorStructuredResponse, mode?: TutorMode): boolean {
-  if (!hasMeaningfulText(response.explanation, mode === 'full' ? 60 : 25)) return false;
-  if (response.steps.some((step) => !hasMeaningfulText(step.title, 3) || !hasMeaningfulText(step.content, 35))) return false;
-  if (response.hints.some((hint) => !hasMeaningfulText(hint, 8))) return false;
+  if (!hasMeaningfulText(response.explanation, 20)) return false;
+  if (response.steps.some((step) => !hasMeaningfulText(step.title, 2) || !hasMeaningfulText(step.content, 12))) return false;
+  if (response.hints.some((hint) => !hasMeaningfulText(hint, 4))) return false;
 
-  const totalStepContent = response.steps.reduce((total, step) => total + step.content.trim().length, 0);
-  if (mode === 'full') return response.steps.length >= 4 && totalStepContent >= 300 && response.hints.length >= 2;
-  if (mode === 'step_by_step') return response.steps.length >= 3 && totalStepContent >= 180;
-  return response.steps.length >= 1;
+  // The selected mode controls the requested pedagogy in the system prompt.
+  // Fixed character and step counts incorrectly rejected valid concise and
+  // conceptual exercises after their answer had already been generated.
+  // A worked or guided solution must contain an actual progression, while the
+  // number of relevant steps remains determined by the exercise itself.
+  if (mode === 'step_by_step' || mode === 'full') return response.steps.length >= 2;
+  return true;
 }
 
 function buildQualityRetryPrompt(mode?: TutorMode): string {
   const fullRequirements = mode === 'full'
-    ? 'נדרשים לפחות 4 שלבים מפורטים: נתונים ומבוקש, עקרונות ונוסחאות, הצבה וחישוב מלא, ותשובה סופית עם יחידות ובדיקה.'
+    ? 'כלול את כל השלבים שרלוונטיים לתרגיל: נתונים ומבוקש, עקרונות ונוסחאות, הצבה וחישוב כאשר קיימים, ותשובה סופית עם יחידות ובדיקה.'
     : 'יש לפרק את הדרך לשלבים מהותיים ומוסברים שמתאימים למצב ההוראה שנבחר.';
   return `התשובה הקודמת אינה פתרון לימודי תקין: היא קצרה מדי או כוללת placeholders כגון "...". ${fullRequirements}
 כתוב מחדש את כל התשובה מהתחלה. אין להשתמש בשלוש נקודות במקום תוכן. החזר JSON בלבד לפי הסכמה שניתנה.`;
@@ -139,9 +143,23 @@ export function buildSourceCitations(chunks: KnowledgeChunk[]): TutorSourceCitat
   }));
 }
 
-export function buildGroundingInstruction(sourceCount: number): string {
+export interface DirectAttachmentContext {
+  kind: 'document' | 'image';
+  name?: string;
+}
+
+export function buildGroundingInstruction(
+  sourceCount: number,
+  attachment?: DirectAttachmentContext
+): string {
+  if (attachment) {
+    const attachmentLabel = attachment.kind === 'document'
+      ? `המסמך המצורף${attachment.name ? ` "${attachment.name}"` : ''}`
+      : 'התמונה המצורפת';
+    return `${attachmentLabel} הוא מקור הסמכות לנתוני התרגיל. קרא ממנו את התרגיל שהמשתמש ציין ופתור אותו בלבד. אין לטעון שלא צורף מקור, ואין להוסיף ציטוטי מאגר שלא סופקו.`;
+  }
   if (sourceCount === 0) {
-    return 'לא נמצא חומר לימוד רלוונטי במאגר. אל תמציא מקור, קישור או ציטוט; ענה מהידע הכללי והבהר שאין מקור מצורף.';
+    return 'לא סופקו מקורות מאגר לשאלה זו. ענה מהידע הכללי ואל תמציא מקור, קישור או ציטוט.';
   }
   return `השתמש רק בציטוטים [מקור 1] עד [מקור ${sourceCount}] שסופקו כאן. אל תמציא מספר מקור, שם מקור או קישור שלא הופיעו בחומר.`;
 }
@@ -304,7 +322,8 @@ export class TutorService {
         );
         const conversationHistory = await this.loadHistory(conversationId);
         const userMessageContent = this.buildUserPrompt(
-          question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic
+          question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic,
+          this.getDirectAttachmentContext(question)
         );
         await db.insert(conversationMessages).values({
           conversationId, role: 'user', content: userMessageContent,
@@ -318,14 +337,12 @@ export class TutorService {
     }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
-      question.text, contextText, ragContext.length, question.topic, question.subtopic
+      question.text, contextText, ragContext.length, question.topic, question.subtopic,
+      this.getDirectAttachmentContext(question)
     );
 
     const gateway = await createStreamingGateway(question.userId);
-    const attachmentInstruction = question.documentName
-      ? `\n\nלשאלה מצורף המסמך "${question.documentName}". המסמך המצורף הוא מקור הסמכות היחיד לנתוני התרגיל בבקשה זו. קרא את התרגיל המדויק שהמשתמש ציין, חלץ ממנו את כל הנתונים והמבוקש, ופתור אותו בלבד. אין לערב שאלות או נתונים ממקורות אחרים.`
-      : '';
-    const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent + attachmentInstruction }];
+    const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent }];
     const attachments = [
       ...(question.imageData ? [{ mimeType: 'image/jpeg', data: question.imageData }] : []),
       ...(question.documentData && question.documentMimeType ? [{ mimeType: question.documentMimeType, data: question.documentData }] : []),
@@ -353,8 +370,10 @@ export class TutorService {
         signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
       })) {
         if (!chunk.delta) continue;
+        // Buffer the provider's structured JSON until it passes validation.
+        // Showing unvalidated text caused the UI to begin an answer and then
+        // replace it with an error when the post-stream quality check failed.
         fullText += chunk.delta;
-        yield { type: 'delta', text: chunk.delta };
       }
       fullText = fullText.trim();
       if (!fullText) {
@@ -364,6 +383,7 @@ export class TutorService {
 
     let parsedResponse = this.parseStructuredResponse(fullText);
     if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+      console.warn('Tutor response failed quality validation', this.responseQualitySummary(parsedResponse, question.mode, Boolean(attachments.length)));
       const retryResponse = await gateway.generateResponse({
         messages: [
           ...messages,
@@ -381,6 +401,7 @@ export class TutorService {
       fullText = retryResponse.content.trim();
       parsedResponse = this.parseStructuredResponse(fullText);
       if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+        console.warn('Tutor retry failed quality validation', this.responseQualitySummary(parsedResponse, question.mode, Boolean(attachments.length)));
         throw new Error('TUTOR_INCOMPLETE_RESPONSE');
       }
     }
@@ -538,11 +559,33 @@ export class TutorService {
     contextText: string,
     sourceCount: number,
     topic?: string,
-    subtopic?: string
+    subtopic?: string,
+    attachment?: DirectAttachmentContext
   ): string {
     const topicLine = topic ? `\nנושא: ${topic}${subtopic ? ` → ${subtopic}` : ''}` : '';
-    const groundingInstruction = buildGroundingInstruction(sourceCount);
+    const groundingInstruction = buildGroundingInstruction(sourceCount, attachment);
     return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}\n\n` : ''}${groundingInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
+  }
+
+  private static getDirectAttachmentContext(question: TutorQuestion): DirectAttachmentContext | undefined {
+    if (question.documentData) return { kind: 'document', name: question.documentName };
+    if (question.imageData) return { kind: 'image' };
+    return undefined;
+  }
+
+  private static responseQualitySummary(
+    response: TutorStructuredResponse,
+    mode: TutorMode | undefined,
+    hasAttachment: boolean
+  ): Record<string, unknown> {
+    return {
+      mode: mode ?? 'unspecified',
+      hasAttachment,
+      explanationLength: response.explanation.trim().length,
+      stepCount: response.steps.length,
+      stepContentLengths: response.steps.map((step) => step.content.trim().length),
+      hintCount: response.hints.length,
+    };
   }
 
   private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
@@ -636,7 +679,7 @@ export function parseTutorStructuredResponse(rawText: string): TutorStructuredRe
         .replace(/^\s*```(?:json|markdown)?\s*/i, '')
         .replace(/\s*```\s*$/i, '')
     );
-    const safeExplanation = explanation || readableRawText || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+    const safeExplanation = explanation || readableRawText || UNPARSEABLE_RESPONSE_MESSAGE;
     return {
       explanation: safeExplanation,
       steps: [{ number: 1, title: 'הסבר', content: safeExplanation }],

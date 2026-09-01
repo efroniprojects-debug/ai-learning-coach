@@ -69,6 +69,7 @@ const STREAM_STAGE_MESSAGES: Record<string, string> = {
   rag_started: 'מחפש חומר לימוד רלוונטי...',
   rag_completed: 'מכין הסבר שמתאים לשאלה...',
   rag_skipped: 'מכין הסבר על סמך הידע של המורה...',
+  attachment_ready: 'קורא את התרגיל מהמסמך המצורף...',
   gemini_started: 'בונה את ההסבר שלב אחרי שלב...',
 };
 

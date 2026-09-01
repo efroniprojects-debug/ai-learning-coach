@@ -43,6 +43,13 @@ describe('parseTutorStructuredResponse', () => {
     expect(result.explanation).not.toContain('{');
   });
 
+  it('marks an unparseable provider response as incomplete instead of accepting the fallback', () => {
+    const result = parseTutorStructuredResponse('{"steps": [broken');
+
+    expect(result.explanation).toContain('לא הצלחתי לסדר');
+    expect(isTutorResponseComplete(result, 'full')).toBe(false);
+  });
+
   it('preserves a plain-text solution when the provider ignores JSON mode', () => {
     const result = parseTutorStructuredResponse('```markdown\nפתרון מלא: נציב בנוסחה ונקבל $x=4$.\n```');
 
@@ -79,6 +86,27 @@ describe('tutor response quality gate', () => {
       misconceptions: [],
     }, 'full')).toBe(true);
   });
+
+  it('accepts a concise valid solution instead of grading it by character count', () => {
+    expect(isTutorResponseComplete({
+      explanation: 'הכדור נע בהשפעת כוח הכובד בלבד ולכן תאוצתו קבועה כלפי מטה.',
+      steps: [
+        { number: 1, title: 'עיקרון', content: 'בוחרים מעלה כחיובי ולכן התאוצה היא $a=-g$.' },
+        { number: 2, title: 'מסקנה', content: 'גם בעלייה וגם בירידה התאוצה נשארת כלפי מטה.' },
+      ],
+      hints: ['הפרד בין כיוון המהירות לכיוון התאוצה.'],
+      misconceptions: [],
+    }, 'full')).toBe(true);
+  });
+
+  it('still rejects a one-step response in a worked-solution mode', () => {
+    expect(isTutorResponseComplete({
+      explanation: 'נדרש כאן פתרון מדורג ולא תשובה שמדלגת ישירות אל התוצאה הסופית.',
+      steps: [{ number: 1, title: 'תוצאה', content: 'התשובה נכתבה ללא דרך פתרון מספקת.' }],
+      hints: ['בדוק את דרך הפתרון.'],
+      misconceptions: [],
+    }, 'full')).toBe(false);
+  });
 });
 
 describe('source grounding', () => {
@@ -108,6 +136,15 @@ describe('source grounding', () => {
   it('forbids invented references when retrieval returns no source', () => {
     expect(buildGroundingInstruction(0)).toContain('אל תמציא');
     expect(buildGroundingInstruction(2)).toContain('[מקור 1] עד [מקור 2]');
+  });
+
+  it('treats an attached document as the source instead of claiming none was attached', () => {
+    const instruction = buildGroundingInstruction(0, { kind: 'document', name: 'workbook.pdf' });
+
+    expect(instruction).toContain('המסמך המצורף');
+    expect(instruction).toContain('workbook.pdf');
+    expect(instruction).not.toContain('לא נמצא חומר');
+    expect(instruction).not.toContain('אין מקור מצורף');
   });
 
   it('removes citation numbers that were not present in retrieved chunks', () => {

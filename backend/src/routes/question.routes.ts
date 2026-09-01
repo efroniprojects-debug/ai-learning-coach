@@ -185,7 +185,8 @@ export async function questionRoutes(app: FastifyInstance) {
             sendEvent({ type: 'status', stage: 'rag_skipped', reason: ragErr instanceof Error ? ragErr.message : String(ragErr) });
           }
         } else {
-          sendEvent({ type: 'status', stage: 'rag_skipped', reason: 'direct_attachment_is_primary_source' });
+          // A direct attachment is a real source, not a failed/empty RAG lookup.
+          sendEvent({ type: 'status', stage: 'attachment_ready', reason: 'direct_attachment_is_primary_source' });
         }
 
         sendEvent({ type: 'status', stage: 'gemini_started' });
