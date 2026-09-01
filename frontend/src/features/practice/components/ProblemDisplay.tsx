@@ -32,6 +32,8 @@ function mathPracticeQuestion(concept: string, difficulty: number): string {
 }
 
 export function ProblemDisplay({ problem, subjectId }: { problem: PracticeProblem; subjectId: string }) {
+  // Preview can briefly run against the previous backend contract during a staged deploy.
+  const hints = Array.isArray(problem.hints) ? problem.hints : [];
   const normalizedPhysicsConcept = Object.keys(CONCEPT_NAMES).find(
     (key) => key.toLowerCase() === problem.conceptId.toLowerCase()
   );
@@ -61,11 +63,11 @@ export function ProblemDisplay({ problem, subjectId }: { problem: PracticeProble
             ? mathPracticeQuestion(problem.conceptId, problem.difficulty)
             : practiceQuestion(problem.conceptId, problem.difficulty))} />
         </div>
-        {problem.hints.length > 0 && (
+        {hints.length > 0 && (
           <details className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
             <summary className="cursor-pointer font-medium text-amber-900">רמזים מדורגים</summary>
             <ol className="mt-2 list-decimal space-y-1 pr-5 text-sm text-amber-900">
-              {problem.hints.map((hint) => <li key={hint}><FormattedText text={hint} /></li>)}
+              {hints.map((hint) => <li key={hint}><FormattedText text={hint} /></li>)}
             </ol>
           </details>
         )}

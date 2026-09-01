@@ -7,7 +7,7 @@ export interface PracticeProblem {
   eloRating: number;
   question?: string;
   expectedAnswer?: string;
-  hints: string[];
+  hints?: string[];
   source?: {
     type: 'original-aligned';
     curriculumVersion: string;

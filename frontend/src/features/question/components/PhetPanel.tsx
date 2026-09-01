@@ -20,6 +20,20 @@ interface Props {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
+// Keeps Math simulations available while the new backend and frontend are
+// deployed at different times. The server registry remains authoritative.
+const MATH_SIMULATION_FALLBACKS: Array<PhetSim & { topics: string[]; units: number[] }> = [
+  { title: 'גרף שיפוע וחיתוך', url: 'https://phet.colorado.edu/sims/html/graphing-slope-intercept/latest/graphing-slope-intercept_all.html', description: 'חוקרים כיצד שיפוע ונקודת חיתוך משנים ישר.', topics: ['פונקציה קווית', 'גאומטריה אנליטית'], units: [3, 4, 5] },
+  { title: 'התאמת עקומה לנתונים', url: 'https://phet.colorado.edu/sims/html/curve-fitting/latest/curve-fitting_all.html', description: 'מתאימים מודל לנתונים ובוחנים את איכות ההתאמה.', topics: ['דיאגרמות פיזור ורגרסיה', 'סטטיסטיקה', 'בדיקת השערות'], units: [3, 4, 5] },
+  { title: 'חוקר חשבון דיפרנציאלי ואינטגרלי', url: 'https://phet.colorado.edu/sims/html/calculus-grapher/latest/calculus-grapher_all.html', description: 'משווים בין פונקציה, נגזרת ופונקציית הצטברות.', topics: ['נגזרות', 'יישומי נגזרת', 'חקירת פונקציות', 'אינטגרלים'], units: [4, 5] },
+  { title: 'מרובעים', url: 'https://phet.colorado.edu/sims/html/quadrilateral/latest/quadrilateral_all.html', description: 'חוקרים תכונות קבועות ומשתנות של משפחות מרובעים.', topics: ['גאומטריה במישור', 'גאומטריה משולבת', 'גאומטריה אוקלידית'], units: [3, 4, 5] },
+];
+
+function localMathSimulations(subtopic: string, studyUnits?: number): PhetSim[] {
+  return MATH_SIMULATION_FALLBACKS.filter((simulation) =>
+    simulation.topics.includes(subtopic) && (!studyUnits || simulation.units.includes(studyUnits)));
+}
+
 export function PhetPanel({ subjectId, studyUnits, subtopic }: Props) {
   const [openUrl, setOpenUrl] = useState<string | null>(null);
   const [iframeLoaded, setIframeLoaded] = useState(false);
@@ -34,6 +48,7 @@ export function PhetPanel({ subjectId, studyUnits, subtopic }: Props) {
         ? `${API_BASE}/api/v1/physics/phet?subtopic=${encodeURIComponent(subtopic)}`
         : `${API_BASE}/api/v1/subjects/${encodeURIComponent(subjectId)}/simulations?${params}`;
       const res = await fetch(endpoint);
+      if (!res.ok && subjectId === 'math') return localMathSimulations(subtopic, studyUnits);
       if (!res.ok) throw new Error('PHET_LOAD_FAILED');
       return res.json() as Promise<PhetSim[]>;
     },

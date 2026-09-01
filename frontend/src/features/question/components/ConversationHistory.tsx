@@ -23,8 +23,10 @@ async function apiRequest(path: string, options?: RequestInit) {
 export function ConversationHistory({ subjectId, studyUnits, activeConversationId, onSelect, onNew }: Props) {
   const [items, setItems] = useState<ConversationSummary[]>([]);
   const [folders, setFolders] = useState<ConversationFolder[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [movingConversationId, setMovingConversationId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [folderFilter, setFolderFilter] = useState('all');
+  const [folderFilter, setFolderFilter] = useState('unfiled');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,10 +67,14 @@ export function ConversationHistory({ subjectId, studyUnits, activeConversationI
     } catch (err) { setError(err instanceof Error ? err.message : 'טעינת השיחה נכשלה'); }
   };
 
-  const createFolder = async () => {
+  const createFolder = async (conversation?: ConversationSummary) => {
     const name = window.prompt('שם התיקייה החדשה:')?.trim();
     if (!name) return;
-    try { await apiRequest('/api/v1/conversation-folders', { method: 'POST', body: JSON.stringify({ name }) }); await load(); }
+    try {
+      const result = await apiRequest('/api/v1/conversation-folders', { method: 'POST', body: JSON.stringify({ name }) }) as { folder?: ConversationFolder };
+      if (conversation && result.folder) await moveConversation(conversation, result.folder.id);
+      else await load();
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'יצירת התיקייה נכשלה'); }
   };
 
@@ -82,6 +88,7 @@ export function ConversationHistory({ subjectId, studyUnits, activeConversationI
   const moveConversation = async (conversation: ConversationSummary, folderId: string) => {
     try {
       await apiRequest(`/api/v1/conversations/${conversation.id}`, { method: 'PATCH', body: JSON.stringify({ folderId: folderId || null }) });
+      setMovingConversationId(null);
       await load();
     } catch (err) { setError(err instanceof Error ? err.message : 'העברת השיחה נכשלה'); }
   };
@@ -115,14 +122,16 @@ export function ConversationHistory({ subjectId, studyUnits, activeConversationI
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-3" dir="rtl">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <button type="button" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen} className="flex w-full items-center justify-between bg-transparent p-0 text-right">
         <h2 className="text-sm font-semibold text-gray-900">שיחות קודמות</h2>
-        <button onClick={onNew} className="bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">+ חדשה</button>
-      </div>
+        <span className="text-xs text-gray-500">{isOpen ? 'סגור' : 'פתח'}</span>
+      </button>
+      {isOpen && <div className="mt-3">
+      <div className="mb-3 flex justify-end"><button onClick={onNew} className="bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">+ חדשה</button></div>
       <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="🔎 חיפוש שיחה..." className="mb-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-800" />
       <div className="mb-3 flex gap-1.5">
         <select value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs text-gray-800">
-          <option value="all">כל השיחות</option><option value="unfiled">ללא תיקייה</option>
+          <option value="unfiled">שיחות ללא תיקייה</option>
           {folders.map((folder) => <option key={folder.id} value={folder.id}>📁 {folder.name}</option>)}
         </select>
         <button onClick={() => void createFolder()} className="bg-violet-50 px-2 py-1 text-xs text-violet-700 hover:bg-violet-100" title="תיקייה חדשה">📁+</button>
@@ -138,17 +147,24 @@ export function ConversationHistory({ subjectId, studyUnits, activeConversationI
                 <span className="text-[11px] text-gray-500">{new Date(item.updatedAt).toLocaleDateString('he-IL')}</span>
               </button>
               <div className="mt-2 flex items-center gap-1 border-t border-gray-100 pt-2">
-                <select value={item.folderId ?? ''} onChange={(event) => void moveConversation(item, event.target.value)} className="min-w-0 flex-1 rounded border border-gray-200 bg-white px-1 py-1 text-[11px] text-gray-700" aria-label="העבר לתיקייה">
-                  <option value="">ללא תיקייה</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-                </select>
+                <button type="button" onClick={() => setMovingConversationId((current) => current === item.id ? null : item.id)} className="mr-auto rounded bg-violet-50 px-2 py-1 text-xs text-violet-700 hover:bg-violet-100" aria-expanded={movingConversationId === item.id}>↪ העבר</button>
                 <button onClick={() => void renameConversation(item)} className="bg-gray-50 px-1.5 py-1 text-xs text-gray-700 hover:bg-gray-100" title="שינוי שם">✏️</button>
                 <button onClick={() => void deleteConversation(item)} className="bg-red-50 px-1.5 py-1 text-xs text-red-700 hover:bg-red-100" title="מחיקה">🗑️</button>
               </div>
+              {movingConversationId === item.id && <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50 p-2">
+                <p className="mb-2 text-[11px] font-medium text-violet-900">העבר לתיקייה:</p>
+                <div className="flex flex-wrap gap-1">
+                  {folders.map((folder) => <button key={folder.id} type="button" onClick={() => void moveConversation(item, folder.id)} className="rounded bg-white px-2 py-1 text-[11px] text-violet-800">{folder.name}</button>)}
+                  <button type="button" onClick={() => void createFolder(item)} className="rounded bg-violet-700 px-2 py-1 text-[11px] text-white">+ תיקייה חדשה</button>
+                  {item.folderId && <button type="button" onClick={() => void moveConversation(item, '')} className="rounded bg-white px-2 py-1 text-[11px] text-gray-700">הסר מתיקייה</button>}
+                </div>
+              </div>}
             </div>
           ))}
         </div>
       )}
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      </div>}
     </section>
   );
 }

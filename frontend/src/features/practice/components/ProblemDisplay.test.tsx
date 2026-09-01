@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { ProblemDisplay } from './ProblemDisplay';
 
 describe('ProblemDisplay', () => {
+  it('keeps the page usable with the previous backend response shape', () => {
+    render(<ProblemDisplay problem={{ id: 'legacy', conceptId: 'Force', difficulty: 1, eloRating: 1000 }} subjectId="physics" />);
+    expect(screen.getByRole('heading', { name: 'נושא: כוח' })).toBeTruthy();
+  });
+
   it('shows the legacy Force concept in clear Hebrew', () => {
     render(<ProblemDisplay problem={{ id: 'physics-force', conceptId: 'Force', difficulty: 3, eloRating: 1200, hints: [] }} subjectId="physics" />);
     expect(screen.getByRole('heading', { name: 'נושא: כוח' })).toBeTruthy();
