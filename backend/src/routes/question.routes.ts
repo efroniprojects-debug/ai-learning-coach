@@ -10,6 +10,13 @@ import { DEFAULT_SUBJECT_ID, getSubjectConfig, normalizeStudyUnits } from '@/con
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 
+const learningMemorySchema = z.object({
+  isEnabled: z.boolean(),
+  learningPreferences: z.string().max(1_000).nullable().optional(),
+  knownStrengths: z.string().max(1_000).nullable().optional(),
+  recurringMistakes: z.string().max(1_000).nullable().optional(),
+});
+
 const askQuestionBodySchema = z.object({
   text: z.string().min(1, 'Question is required').max(2000),
   imageUrls: z.array(z.string().url()).optional(),
@@ -17,6 +24,7 @@ const askQuestionBodySchema = z.object({
   subjectId: z.string().optional().default('physics'),
   studyUnits: z.union([z.literal(3), z.literal(4), z.literal(5)]).optional(),
   teachingStyle: z.enum(['concise', 'balanced', 'deep']).optional(),
+  learningMemory: learningMemorySchema.optional(),
 });
 
 const streamQuestionBodySchema = z.object({
@@ -35,6 +43,7 @@ const streamQuestionBodySchema = z.object({
   documentName: z.string().max(255).optional(),
   mode: z.enum(['step_by_step', 'full', 'diagnose', 'concept']).optional(),
   teachingStyle: z.enum(['concise', 'balanced', 'deep']).optional(),
+  learningMemory: learningMemorySchema.optional(),
   topic: z.string().optional(),
   subtopic: z.string().optional(),
 });
@@ -87,6 +96,7 @@ export async function questionRoutes(app: FastifyInstance) {
             studyUnits,
             conversationId: body.conversationId,
             teachingStyle: body.teachingStyle,
+            learningMemory: body.learningMemory,
           },
           ragContext
         );
@@ -191,6 +201,7 @@ export async function questionRoutes(app: FastifyInstance) {
             documentName: body.documentName,
             mode: body.mode,
             teachingStyle: body.teachingStyle,
+            learningMemory: body.learningMemory,
             topic: body.topic,
             subtopic: body.subtopic,
           },

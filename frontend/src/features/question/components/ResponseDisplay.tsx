@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import type { TutorResponse } from '../types';
+import type { TutorMode } from './ModeSelector';
 
 export function normalizeMathText(text: string): string {
   const normalizedCommands = text
@@ -74,15 +75,20 @@ export function FormattedText({ text }: { text: string }) {
 
 type Tab = 'explanation' | 'steps' | 'hints';
 
+export function defaultTutorTabForMode(mode?: TutorMode): Tab {
+  return mode === 'step_by_step' || mode === 'full' ? 'steps' : 'explanation';
+}
+
 interface Props {
   response: TutorResponse;
   isStreaming?: boolean;
   streamText?: string;
   onCancel?: () => void;
+  mode?: TutorMode;
 }
 
-export function ResponseDisplay({ response, isStreaming, streamText, onCancel }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('explanation');
+export function ResponseDisplay({ response, isStreaming, streamText, onCancel, mode }: Props) {
+  const [activeTab, setActiveTab] = useState<Tab>(() => defaultTutorTabForMode(mode));
   const [revealedHints, setRevealedHints] = useState(0);
   const [speaking, setSpeaking] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -102,6 +108,11 @@ export function ResponseDisplay({ response, isStreaming, streamText, onCancel }:
 
     return () => window.clearInterval(timerId);
   }, [isStreaming]);
+
+  useEffect(() => {
+    // A new answer must open on the view promised by the selected tutor mode.
+    setActiveTab(defaultTutorTabForMode(mode));
+  }, [mode, response.messageId]);
 
   const toggleSpeech = () => {
     if (!('speechSynthesis' in window)) return;

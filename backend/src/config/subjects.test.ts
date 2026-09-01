@@ -43,4 +43,11 @@ describe('subject registry', () => {
     expect(balanced).toContain('מאוזן ומסביר');
     expect(deep).toContain('מעמיק עם דוגמאות');
   });
+
+  it('gives each tutor mode a distinct and enforceable response contract', () => {
+    expect(buildSystemPrompt('step_by_step')).toContain('כל פעולה נדרשת חייבת להופיע בשלב נפרד');
+    expect(buildSystemPrompt('full')).toContain('מתחילת התרגיל ועד התשובה הסופית');
+    expect(buildSystemPrompt('diagnose')).toContain('אם לא צורף ניסיון, בקש אותו');
+    expect(buildSystemPrompt('concept')).toContain('אל תהפוך את התשובה לפתרון תרגיל מלא');
+  });
 });

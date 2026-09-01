@@ -13,6 +13,8 @@ export interface AIGenerateOptions {
   systemPrompt?: string;
   signal?: AbortSignal;
   attachments?: Array<{ mimeType: string; data: string }>;
+  /** Ask capable providers to constrain the response to a JSON document. */
+  responseFormat?: 'json';
 }
 
 export interface AIGenerateResponse {

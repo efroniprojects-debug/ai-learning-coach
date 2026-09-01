@@ -5,6 +5,7 @@ import { AIGateway, aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
 import type { TeachingStyle, TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
+import { buildLearningMemoryPrompt, type LearningMemoryInput } from '@/config/learning-memory';
 
 // ── Structured response schema ────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ export interface TutorQuestion {
   conversationId?: string;
   mode?: TutorMode;
   teachingStyle?: TeachingStyle;
+  learningMemory?: LearningMemoryInput;
   topic?: string;
   subtopic?: string;
 }
@@ -185,7 +187,8 @@ export class TutorService {
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -217,7 +220,7 @@ export class TutorService {
     ];
 
     const aiResponse = await aiGateway.generateResponse({
-      messages, systemPrompt, maxTokens: 2048, temperature: 0.7,
+      messages, systemPrompt, maxTokens: 2048, temperature: 0.7, responseFormat: 'json',
     });
 
     const structured = sanitizeCitationReferences(
@@ -249,7 +252,8 @@ export class TutorService {
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -296,6 +300,7 @@ export class TutorService {
         userId: question.userId,
         mode: question.mode,
         teachingStyle: question.teachingStyle,
+        learningMemory: question.learningMemory,
         topic: question.topic,
         subtopic: question.subtopic,
         messages,
@@ -306,7 +311,7 @@ export class TutorService {
       fullText = '';
       for await (const chunk of gateway.generateStream({
         messages, systemPrompt, maxTokens: 2048, temperature: 0.4,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json',
       })) {
         if (!chunk.delta) continue;
         fullText += chunk.delta;
@@ -561,7 +566,13 @@ export function parseTutorStructuredResponse(rawText: string): TutorStructuredRe
     return normalizeStructuredResponse(parsed);
   } catch {
     const explanation = extractExplanationFallback(rawText);
-    const safeExplanation = explanation || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+    // Preserve readable teaching content if a provider ignores JSON mode.
+    const readableRawText = normalizeTutorText(
+      rawText
+        .replace(/^\s*```(?:json|markdown)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+    );
+    const safeExplanation = explanation || readableRawText || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
     return {
       explanation: safeExplanation,
       steps: [{ number: 1, title: 'הסבר', content: safeExplanation }],

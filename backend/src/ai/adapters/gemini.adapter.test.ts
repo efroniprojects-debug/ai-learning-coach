@@ -5,6 +5,20 @@ import { GeminiAdapter } from './gemini.adapter';
 describe('GeminiAdapter', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('requests native JSON output for structured calls', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const adapter = new GeminiAdapter('test-key', 'test-model');
+
+    await adapter.generateResponse({ messages: [{ role: 'user', content: 'שאלה' }], responseFormat: 'json' });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(request.body as string) as { generationConfig: { responseMimeType?: string } };
+    expect(body.generationConfig.responseMimeType).toBe('application/json');
+  });
+
   it('normalizes a provider response into the shared gateway contract', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ text: 'תוכן לימודי' }] } }],
