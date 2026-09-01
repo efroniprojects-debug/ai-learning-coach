@@ -49,6 +49,14 @@ describe('parseTutorStructuredResponse', () => {
     expect(result.explanation).not.toContain('לא הצלחתי לסדר');
     expect(result.steps[0].content).toBe(result.explanation);
   });
+
+  it('extracts a double-encoded explanation without exposing JSON transport', () => {
+    const result = parseTutorStructuredResponse('{\\"explanation\\":\\"הסבר פיזיקלי קריא\\",\\"steps\\":[');
+
+    expect(result.explanation).toBe('הסבר פיזיקלי קריא');
+    expect(result.steps[0].content).not.toContain('explanation');
+    expect(result.steps[0].content).not.toContain('{');
+  });
 });
 
 describe('source grounding', () => {
