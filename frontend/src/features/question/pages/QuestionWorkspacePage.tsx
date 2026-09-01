@@ -47,8 +47,9 @@ export function extractStreamingExplanation(jsonText: string): string {
   return result;
 }
 
-function readableQuestionError(error: unknown): string {
+export function readableQuestionError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
+  if (/TUTOR_INCOMPLETE_RESPONSE/.test(message)) return 'המורה לא הצליח להפיק פתרון מלא ואיכותי. אפשר לנסות שוב או לנסח במדויק איזה תרגיל במסמך לפתור.';
   if (/timeout/i.test(message)) return 'הכנת התשובה ארכה יותר מדי. אפשר לנסות שוב בבטחה.';
   if (/network|fetch|connection|חיבור/i.test(message)) return 'החיבור לשרת נקטע. בדוק את החיבור ונסה שוב.';
   if (/429|quota|rate/i.test(message)) return 'שירות המורה עמוס כרגע. המתן מעט ונסה שוב.';

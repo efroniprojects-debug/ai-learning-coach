@@ -42,6 +42,33 @@ const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
 
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
 
+const PLACEHOLDER_RESPONSE = /^(?:\.{2,}|…+|[-–—]|n\/?a|null|undefined)$/i;
+
+function hasMeaningfulText(value: string, minimumLength: number): boolean {
+  const normalized = value.trim();
+  return normalized.length >= minimumLength && !PLACEHOLDER_RESPONSE.test(normalized);
+}
+
+/** Reject structurally valid JSON that does not contain a usable lesson. */
+export function isTutorResponseComplete(response: TutorStructuredResponse, mode?: TutorMode): boolean {
+  if (!hasMeaningfulText(response.explanation, mode === 'full' ? 60 : 25)) return false;
+  if (response.steps.some((step) => !hasMeaningfulText(step.title, 3) || !hasMeaningfulText(step.content, 35))) return false;
+  if (response.hints.some((hint) => !hasMeaningfulText(hint, 8))) return false;
+
+  const totalStepContent = response.steps.reduce((total, step) => total + step.content.trim().length, 0);
+  if (mode === 'full') return response.steps.length >= 4 && totalStepContent >= 300 && response.hints.length >= 2;
+  if (mode === 'step_by_step') return response.steps.length >= 3 && totalStepContent >= 180;
+  return response.steps.length >= 1;
+}
+
+function buildQualityRetryPrompt(mode?: TutorMode): string {
+  const fullRequirements = mode === 'full'
+    ? 'נדרשים לפחות 4 שלבים מפורטים: נתונים ומבוקש, עקרונות ונוסחאות, הצבה וחישוב מלא, ותשובה סופית עם יחידות ובדיקה.'
+    : 'יש לפרק את הדרך לשלבים מהותיים ומוסברים שמתאימים למצב ההוראה שנבחר.';
+  return `התשובה הקודמת אינה פתרון לימודי תקין: היא קצרה מדי או כוללת placeholders כגון "...". ${fullRequirements}
+כתוב מחדש את כל התשובה מהתחלה. אין להשתמש בשלוש נקודות במקום תוכן. החזר JSON בלבד לפי הסכמה שניתנה.`;
+}
+
 export interface TutorSourceCitation {
   id: string;
   text: string;
@@ -333,13 +360,36 @@ export class TutorService {
       if (!fullText) {
         throw new Error('Gemini returned empty response');
       }
-      if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
     }
 
-    const structured = sanitizeCitationReferences(
-      this.parseStructuredResponse(fullText),
-      ragContext.length
-    );
+    let parsedResponse = this.parseStructuredResponse(fullText);
+    if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+      const retryResponse = await gateway.generateResponse({
+        messages: [
+          ...messages,
+          { role: 'assistant', content: fullText },
+          { role: 'user', content: buildQualityRetryPrompt(question.mode) },
+        ],
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.2,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        attachments,
+        responseFormat: 'json',
+        responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
+      });
+      fullText = retryResponse.content.trim();
+      parsedResponse = this.parseStructuredResponse(fullText);
+      if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+        throw new Error('TUTOR_INCOMPLETE_RESPONSE');
+      }
+    }
+
+    // Cache only an answer that passed the pedagogical quality gate; otherwise
+    // a placeholder response could keep triggering on every identical question.
+    if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
+
+    const structured = sanitizeCitationReferences(parsedResponse, ragContext.length);
     const masteryUpdate = await this.updateMastery(question, structured);
 
     let savedMsgId = 'no-db-' + Date.now();
