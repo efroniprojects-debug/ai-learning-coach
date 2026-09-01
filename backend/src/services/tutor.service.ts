@@ -3,8 +3,9 @@ import { db, conversations, conversationMessages, skillMastery } from '@/db';
 import { eq, asc, and, sql } from 'drizzle-orm';
 import { AIGateway, aiGateway } from '@/ai/gateway';
 import { buildSystemPrompt, normalizeStudyUnits } from '@/config/subjects';
-import type { TutorMode } from '@/config/subjects';
+import type { TeachingStyle, TutorMode } from '@/config/subjects';
 import type { KnowledgeChunk, AIMessage } from '@/ai/types';
+import { buildLearningMemoryPrompt, type LearningMemoryInput } from '@/config/learning-memory';
 
 // ── Structured response schema ────────────────────────────────────────────────
 
@@ -27,7 +28,62 @@ export const TutorStructuredResponseSchema = z.object({
   socraticQuestion: z.string().optional(),
 });
 
+const TUTOR_RESPONSE_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'OBJECT',
+  required: ['explanation', 'steps', 'hints', 'misconceptions'],
+  properties: {
+    explanation: { type: 'STRING' },
+    steps: { type: 'ARRAY', items: { type: 'OBJECT', required: ['number', 'title', 'content'], properties: { number: { type: 'INTEGER' }, title: { type: 'STRING' }, content: { type: 'STRING' } } } },
+    hints: { type: 'ARRAY', items: { type: 'STRING' } },
+    misconceptions: { type: 'ARRAY', items: { type: 'OBJECT', required: ['misconception', 'correction'], properties: { misconception: { type: 'STRING' }, correction: { type: 'STRING' } } } },
+    socraticQuestion: { type: 'STRING', nullable: true },
+  },
+};
+
 export type TutorStructuredResponse = z.infer<typeof TutorStructuredResponseSchema>;
+
+const UNPARSEABLE_RESPONSE_MESSAGE = 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+const PLACEHOLDER_RESPONSE = /^(?:\.{2,}|…+|[-–—]|n\/?a|null|undefined|לא הצלחתי לסדר את התשובה)/i;
+
+function hasMeaningfulText(value: string, minimumLength: number): boolean {
+  const normalized = value.trim();
+  return normalized.length >= minimumLength && !PLACEHOLDER_RESPONSE.test(normalized);
+}
+
+/** Reject transport placeholders and empty lesson fields without grading by length. */
+export function isTutorResponseComplete(response: TutorStructuredResponse, mode?: TutorMode): boolean {
+  if (!hasMeaningfulText(response.explanation, 20)) return false;
+  if (response.steps.some((step) => !hasMeaningfulText(step.title, 2) || !hasMeaningfulText(step.content, 12))) return false;
+  if (response.hints.some((hint) => !hasMeaningfulText(hint, 4))) return false;
+
+  // The selected mode controls the requested pedagogy in the system prompt.
+  // Fixed character and step counts incorrectly rejected valid concise and
+  // conceptual exercises after their answer had already been generated.
+  // A worked or guided solution must contain an actual progression, while the
+  // number of relevant steps remains determined by the exercise itself.
+  if (mode === 'step_by_step' || mode === 'full') return response.steps.length >= 2;
+  return true;
+}
+
+function buildQualityRetryPrompt(mode?: TutorMode): string {
+  const fullRequirements = mode === 'full'
+    ? 'כלול את כל השלבים שרלוונטיים לתרגיל: נתונים ומבוקש, עקרונות ונוסחאות, הצבה וחישוב כאשר קיימים, ותשובה סופית עם יחידות ובדיקה.'
+    : 'יש לפרק את הדרך לשלבים מהותיים ומוסברים שמתאימים למצב ההוראה שנבחר.';
+  return `התשובה הקודמת אינה פתרון לימודי תקין: היא קצרה מדי או כוללת placeholders כגון "...". ${fullRequirements}
+כתוב מחדש את כל התשובה מהתחלה. אין להשתמש בשלוש נקודות במקום תוכן. החזר JSON בלבד לפי הסכמה שניתנה.`;
+}
+
+export interface TutorSourceCitation {
+  id: string;
+  text: string;
+  source: string;
+  citationNumber: number;
+  sourceType: KnowledgeChunk['sourceType'];
+  page?: number;
+  section?: string;
+  year?: number;
+  url?: string;
+}
 
 export interface TutorQuestion {
   text: string;
@@ -41,6 +97,8 @@ export interface TutorQuestion {
   studyUnits?: number;
   conversationId?: string;
   mode?: TutorMode;
+  teachingStyle?: TeachingStyle;
+  learningMemory?: LearningMemoryInput;
   topic?: string;
   subtopic?: string;
 }
@@ -49,7 +107,7 @@ export interface TutorFullResponse {
   structured: TutorStructuredResponse;
   conversationId: string;
   messageId: string;
-  sourceChunks: Array<{ id: string; text: string; source: string }>;
+  sourceChunks: TutorSourceCitation[];
   rawText: string;
   masteryUpdate?: { subtopic: string; previousElo: number; elo: number; confidence: string };
 }
@@ -60,6 +118,82 @@ const GEMINI_TIMEOUT_MS = 90_000;
 const GEMINI_CACHE_TTL_MS = 5 * 60 * 1000;
 const geminiResponseCache = new Map<string, { response: string; expiresAt: number }>();
 
+function verifiedSourceUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Convert only retrieved chunks into citations; URLs are never inferred. */
+export function buildSourceCitations(chunks: KnowledgeChunk[]): TutorSourceCitation[] {
+  return chunks.map((chunk, index) => ({
+    id: chunk.id,
+    text: chunk.text.trim().substring(0, 240),
+    source: chunk.source,
+    citationNumber: index + 1,
+    sourceType: chunk.sourceType,
+    page: chunk.metadata.page,
+    section: chunk.metadata.section,
+    year: chunk.metadata.year,
+    url: verifiedSourceUrl(chunk.metadata.sourceUrl),
+  }));
+}
+
+export interface DirectAttachmentContext {
+  kind: 'document' | 'image';
+  name?: string;
+}
+
+export function buildGroundingInstruction(
+  sourceCount: number,
+  attachment?: DirectAttachmentContext
+): string {
+  if (attachment) {
+    const attachmentLabel = attachment.kind === 'document'
+      ? `המסמך המצורף${attachment.name ? ` "${attachment.name}"` : ''}`
+      : 'התמונה המצורפת';
+    return `${attachmentLabel} הוא מקור הסמכות לנתוני התרגיל. קרא ממנו את התרגיל שהמשתמש ציין ופתור אותו בלבד. אין לטעון שלא צורף מקור, ואין להוסיף ציטוטי מאגר שלא סופקו.`;
+  }
+  if (sourceCount === 0) {
+    return 'לא סופקו מקורות מאגר לשאלה זו. ענה מהידע הכללי ואל תמציא מקור, קישור או ציטוט.';
+  }
+  return `השתמש רק בציטוטים [מקור 1] עד [מקור ${sourceCount}] שסופקו כאן. אל תמציא מספר מקור, שם מקור או קישור שלא הופיעו בחומר.`;
+}
+
+function sanitizeCitationText(text: string, sourceCount: number): string {
+  return text.replace(/\[מקור\s+(\d+)\]/g, (citation, rawNumber: string) => {
+    const number = Number(rawNumber);
+    return number >= 1 && number <= sourceCount ? citation : '';
+  }).replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+/** Remove model-generated citation markers that do not map to retrieved chunks. */
+export function sanitizeCitationReferences(
+  response: TutorStructuredResponse,
+  sourceCount: number
+): TutorStructuredResponse {
+  return {
+    explanation: sanitizeCitationText(response.explanation, sourceCount),
+    steps: response.steps.map((step) => ({
+      ...step,
+      title: sanitizeCitationText(step.title, sourceCount),
+      content: sanitizeCitationText(step.content, sourceCount),
+    })),
+    hints: response.hints.map((hint) => sanitizeCitationText(hint, sourceCount)),
+    misconceptions: response.misconceptions.map((item) => ({
+      misconception: sanitizeCitationText(item.misconception, sourceCount),
+      correction: sanitizeCitationText(item.correction, sourceCount),
+    })),
+    socraticQuestion: response.socraticQuestion
+      ? sanitizeCitationText(response.socraticQuestion, sourceCount)
+      : undefined,
+  };
+}
+
 async function createStreamingGateway(userId: string): Promise<AIGateway> {
   const gateway = new AIGateway();
   try {
@@ -68,7 +202,7 @@ async function createStreamingGateway(userId: string): Promise<AIGateway> {
   } catch (userConfigError) {
     const demoKey = process.env.DEMO_GEMINI_API_KEY;
     if (!demoKey) throw userConfigError;
-    gateway.initializeWithProvider('gemini', demoKey, process.env.DEMO_GEMINI_MODEL ?? 'gemini-3.6-flash');
+    gateway.initializeWithProvider('gemini', demoKey, process.env.DEMO_GEMINI_MODEL ?? 'gemini-2.0-flash');
     return gateway;
   }
 }
@@ -110,7 +244,8 @@ export class TutorService {
   ): Promise<TutorFullResponse> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     await aiGateway.initializeForUser(question.userId);
 
@@ -123,7 +258,7 @@ export class TutorService {
       );
       history = await this.loadHistory(convId);
       const userMessageContent = this.buildUserPrompt(
-        question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+        question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic
       );
       await db.insert(conversationMessages).values({
         conversationId: convId, role: 'user', content: userMessageContent,
@@ -133,7 +268,7 @@ export class TutorService {
     }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
-      question.text, contextText, question.topic, question.subtopic
+      question.text, contextText, ragContext.length, question.topic, question.subtopic
     );
 
     const messages: AIMessage[] = [
@@ -142,10 +277,13 @@ export class TutorService {
     ];
 
     const aiResponse = await aiGateway.generateResponse({
-      messages, systemPrompt, maxTokens: 2048, temperature: 0.7,
+      messages, systemPrompt, maxTokens: 4096, temperature: 0.7, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
     });
 
-    const structured = this.parseStructuredResponse(aiResponse.content);
+    const structured = sanitizeCitationReferences(
+      this.parseStructuredResponse(aiResponse.content),
+      ragContext.length
+    );
     const masteryUpdate = await this.updateMastery(question, structured);
 
     const [savedAssistantMsg] = await db
@@ -161,7 +299,7 @@ export class TutorService {
       messageId: savedAssistantMsg.id,
       rawText: aiResponse.content,
       masteryUpdate,
-      sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
+      sourceChunks: buildSourceCitations(ragContext),
     };
   }
 
@@ -171,7 +309,8 @@ export class TutorService {
   ): AsyncGenerator<{ type: 'delta'; text: string } | { type: 'done'; data: TutorFullResponse }> {
     const subjectId = question.subjectId ?? 'physics';
     const studyUnits = normalizeStudyUnits(subjectId, question.studyUnits);
-    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits);
+    const systemPrompt = buildSystemPrompt(question.mode, subjectId, studyUnits, question.teachingStyle)
+      + buildLearningMemoryPrompt(question.learningMemory);
 
     // Try DB operations, fall back gracefully if unavailable
     let convId = 'no-db-' + Date.now();
@@ -183,7 +322,8 @@ export class TutorService {
         );
         const conversationHistory = await this.loadHistory(conversationId);
         const userMessageContent = this.buildUserPrompt(
-          question.text, this.buildContextFromChunks(ragContext), question.topic, question.subtopic
+          question.text, this.buildContextFromChunks(ragContext), ragContext.length, question.topic, question.subtopic,
+          this.getDirectAttachmentContext(question)
         );
         await db.insert(conversationMessages).values({
           conversationId, role: 'user', content: userMessageContent,
@@ -197,14 +337,12 @@ export class TutorService {
     }
     const contextText = this.buildContextFromChunks(ragContext);
     const userMessageContent = this.buildUserPrompt(
-      question.text, contextText, question.topic, question.subtopic
+      question.text, contextText, ragContext.length, question.topic, question.subtopic,
+      this.getDirectAttachmentContext(question)
     );
 
     const gateway = await createStreamingGateway(question.userId);
-    const attachmentInstruction = question.documentName
-      ? `\n\nלשאלה מצורף המסמך "${question.documentName}". יש לקרוא אותו ולהסתמך עליו בתשובה.`
-      : '';
-    const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent + attachmentInstruction }];
+    const messages: AIMessage[] = [...history, { role: 'user', content: userMessageContent }];
     const attachments = [
       ...(question.imageData ? [{ mimeType: 'image/jpeg', data: question.imageData }] : []),
       ...(question.documentData && question.documentMimeType ? [{ mimeType: question.documentMimeType, data: question.documentData }] : []),
@@ -214,27 +352,65 @@ export class TutorService {
     // response for different binary content with the same filename.
     const cacheKey = question.imageData || question.documentData
       ? ''
-      : JSON.stringify({ userId: question.userId, mode: question.mode, topic: question.topic, subtopic: question.subtopic, messages });
+      : JSON.stringify({
+        userId: question.userId,
+        mode: question.mode,
+        teachingStyle: question.teachingStyle,
+        learningMemory: question.learningMemory,
+        topic: question.topic,
+        subtopic: question.subtopic,
+        messages,
+      });
     let fullText = cacheKey ? getCachedGeminiResponse(cacheKey) : null;
 
     if (!fullText) {
       fullText = '';
       for await (const chunk of gateway.generateStream({
-        messages, systemPrompt, maxTokens: 2048, temperature: 0.4,
-        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments,
+        messages, systemPrompt, maxTokens: 4096, temperature: 0.4,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS), attachments, responseFormat: 'json', responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
       })) {
         if (!chunk.delta) continue;
+        // Buffer the provider's structured JSON until it passes validation.
+        // Showing unvalidated text caused the UI to begin an answer and then
+        // replace it with an error when the post-stream quality check failed.
         fullText += chunk.delta;
-        yield { type: 'delta', text: chunk.delta };
       }
       fullText = fullText.trim();
       if (!fullText) {
         throw new Error('Gemini returned empty response');
       }
-      if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
     }
 
-    const structured = this.parseStructuredResponse(fullText);
+    let parsedResponse = this.parseStructuredResponse(fullText);
+    if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+      console.warn('Tutor response failed quality validation', this.responseQualitySummary(parsedResponse, question.mode, Boolean(attachments.length)));
+      const retryResponse = await gateway.generateResponse({
+        messages: [
+          ...messages,
+          { role: 'assistant', content: fullText },
+          { role: 'user', content: buildQualityRetryPrompt(question.mode) },
+        ],
+        systemPrompt,
+        maxTokens: 4096,
+        temperature: 0.2,
+        signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        attachments,
+        responseFormat: 'json',
+        responseJsonSchema: TUTOR_RESPONSE_JSON_SCHEMA,
+      });
+      fullText = retryResponse.content.trim();
+      parsedResponse = this.parseStructuredResponse(fullText);
+      if (!isTutorResponseComplete(parsedResponse, question.mode)) {
+        console.warn('Tutor retry failed quality validation', this.responseQualitySummary(parsedResponse, question.mode, Boolean(attachments.length)));
+        throw new Error('TUTOR_INCOMPLETE_RESPONSE');
+      }
+    }
+
+    // Cache only an answer that passed the pedagogical quality gate; otherwise
+    // a placeholder response could keep triggering on every identical question.
+    if (cacheKey) geminiResponseCache.set(cacheKey, { response: fullText, expiresAt: Date.now() + GEMINI_CACHE_TTL_MS });
+
+    const structured = sanitizeCitationReferences(parsedResponse, ragContext.length);
     const masteryUpdate = await this.updateMastery(question, structured);
 
     let savedMsgId = 'no-db-' + Date.now();
@@ -259,7 +435,7 @@ export class TutorService {
         messageId: savedMsgId,
         rawText: fullText,
         masteryUpdate,
-        sourceChunks: ragContext.map((c) => ({ id: c.id, text: c.text.substring(0, 200), source: c.source })),
+        sourceChunks: buildSourceCitations(ragContext),
       },
     };
   }
@@ -379,13 +555,37 @@ export class TutorService {
   }
 
   private static buildUserPrompt(
-    questionText: string, contextText: string, topic?: string, subtopic?: string
+    questionText: string,
+    contextText: string,
+    sourceCount: number,
+    topic?: string,
+    subtopic?: string,
+    attachment?: DirectAttachmentContext
   ): string {
     const topicLine = topic ? `\nנושא: ${topic}${subtopic ? ` → ${subtopic}` : ''}` : '';
-    const citationInstruction = contextText
-      ? '\nהסתמך על החומר הרלוונטי, וציין בתוך ההסבר הפניות בפורמט [מקור 1], [מקור 2] לפי הצורך.'
-      : '';
-    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}` : ''}${citationInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
+    const groundingInstruction = buildGroundingInstruction(sourceCount, attachment);
+    return `שאלה: ${questionText}${topicLine}\n\n${contextText ? `חומר לימוד רלוונטי:\n${contextText}\n\n` : ''}${groundingInstruction}\n\nענה בפורמט JSON המדויק. ללא מלל מחוץ לאובייקט ה-JSON.`;
+  }
+
+  private static getDirectAttachmentContext(question: TutorQuestion): DirectAttachmentContext | undefined {
+    if (question.documentData) return { kind: 'document', name: question.documentName };
+    if (question.imageData) return { kind: 'image' };
+    return undefined;
+  }
+
+  private static responseQualitySummary(
+    response: TutorStructuredResponse,
+    mode: TutorMode | undefined,
+    hasAttachment: boolean
+  ): Record<string, unknown> {
+    return {
+      mode: mode ?? 'unspecified',
+      hasAttachment,
+      explanationLength: response.explanation.trim().length,
+      stepCount: response.steps.length,
+      stepContentLengths: response.steps.map((step) => step.content.trim().length),
+      hintCount: response.hints.length,
+    };
   }
 
   private static buildContextFromChunks(chunks: KnowledgeChunk[]): string {
@@ -454,7 +654,8 @@ function extractJsonObject(rawText: string): string {
 }
 
 function extractExplanationFallback(rawText: string): string | null {
-  const match = extractJsonObject(rawText).match(/"explanation"\s*:\s*"((?:\\.|[^"\\])*)"/s);
+  const candidate = extractJsonObject(rawText).replace(/\\"/g, '"');
+  const match = candidate.match(/"explanation"\s*:\s*"((?:\\.|[^"\\])*)"/s);
   if (!match) return null;
   try {
     return normalizeTutorText(JSON.parse(`"${match[1]}"`) as string);
@@ -467,11 +668,18 @@ export function parseTutorStructuredResponse(rawText: string): TutorStructuredRe
   const jsonText = extractJsonObject(rawText);
   try {
     let parsed: unknown = JSON.parse(jsonText);
-    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    for (let depth = 0; depth < 4 && typeof parsed === 'string'; depth += 1) parsed = JSON.parse(parsed);
     return normalizeStructuredResponse(parsed);
   } catch {
     const explanation = extractExplanationFallback(rawText);
-    const safeExplanation = explanation || 'לא הצלחתי לסדר את התשובה. נסה לשלוח את השאלה שוב.';
+    // Preserve readable teaching content if a provider ignores JSON mode.
+    const containsStructuredTransport = /\\?"(?:explanation|steps|hints|misconceptions)\\?"\s*:/.test(rawText);
+    const readableRawText = containsStructuredTransport ? '' : normalizeTutorText(
+      rawText
+        .replace(/^\s*```(?:json|markdown)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+    );
+    const safeExplanation = explanation || readableRawText || UNPARSEABLE_RESPONSE_MESSAGE;
     return {
       explanation: safeExplanation,
       steps: [{ number: 1, title: 'הסבר', content: safeExplanation }],
