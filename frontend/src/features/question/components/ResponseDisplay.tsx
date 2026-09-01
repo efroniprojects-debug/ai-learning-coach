@@ -210,19 +210,43 @@ export function ResponseDisplay({ response, isStreaming, streamText, onCancel }:
               </div>
             )}
 
-            {/* Sources */}
-            {response.sources && response.sources.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">מקורות</p>
-                <div className="space-y-1.5">
-                  {response.sources.map((s) => (
-                    <div key={s.id} className="text-xs text-gray-500 bg-gray-50 rounded px-3 py-1.5">
-                      <span className="font-medium text-gray-600">{s.source}:</span> {s.text}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Retrieved citations only; a missing URL remains visibly non-clickable. */}
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">מקורות ששימשו בתשובה</p>
+              {response.sources && response.sources.length > 0 ? (
+                <ol className="space-y-2">
+                  {response.sources.map((source, index) => {
+                    const citationNumber = source.citationNumber ?? index + 1;
+                    const details = [
+                      source.section ? `סעיף ${source.section}` : null,
+                      source.page ? `עמוד ${source.page}` : null,
+                      source.year ? `שנת ${source.year}` : null,
+                    ].filter((value): value is string => Boolean(value));
+                    const label = `מקור ${citationNumber}: ${source.source}`;
+                    return (
+                      <li key={source.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {source.url ? (
+                            <a href={source.url} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800">
+                              {label} <span aria-hidden="true">↗</span>
+                            </a>
+                          ) : (
+                            <span className="font-semibold text-gray-700">{label}</span>
+                          )}
+                          {details.length > 0 && <span className="text-gray-500">{details.join(' · ')}</span>}
+                        </div>
+                        <p className="mt-1 line-clamp-3 leading-relaxed">{source.text}</p>
+                        {!source.url && <p className="mt-1 text-gray-400">אין קישור מאומת למקור זה</p>}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="note">
+                  לא נמצא מקור לימודי מתאים לשאלה הזאת. התשובה ניתנה ללא מקור מצורף.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

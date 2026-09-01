@@ -13,6 +13,12 @@ export interface SourceChunk {
   id: string;
   text: string;
   source: string;
+  citationNumber?: number;
+  sourceType?: 'exam' | 'textbook' | 'notebook' | 'custom' | 'google_drive';
+  page?: number;
+  section?: string;
+  year?: number;
+  url?: string;
 }
 
 /** Full structured response from the subject-aware tutor engine. */

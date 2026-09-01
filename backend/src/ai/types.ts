@@ -49,6 +49,8 @@ export interface KnowledgeChunk {
     topic?: string;
     concept?: string;
     sourceName?: string;
+    sourceUrl?: string;
+    year?: number;
   };
 }
 
